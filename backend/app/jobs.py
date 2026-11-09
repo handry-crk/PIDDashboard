@@ -146,7 +146,7 @@ def job_backup(force=False):
     db = get_db()
     os.makedirs(config.BACKUP_DIR, exist_ok=True)
     data = {c: clean_all(db[c].find({})) for c in
-            ["members", "projects", "kandidat", "bom", "vendors", "slots", "activity", "comments", "settings", "files"]}
+            ["members", "projects", "kandidat", "bom", "vendors", "slots", "activity", "comments", "settings", "files", "surveys", "responses"]}
     name = f"pid-backup-{datetime.now(config.TZ).strftime('%Y%m%d-%H%M%S')}.json"
     path = os.path.join(config.BACKUP_DIR, name)
     with open(path, "w") as f:

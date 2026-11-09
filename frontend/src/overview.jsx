@@ -168,12 +168,16 @@ export function Funnel({ rows }) {
   )
 }
 
-export function SlaCompliance({ rows }) {
+export function SlaCompliance({ rows: allRows, byCat, categories, order }) {
+  const [cat, setCat] = useState('')
+  const rows = cat && byCat ? byCat[cat] : allRows
   const has = rows.some((r) => r.n > 0)
   const max = Math.max(1, ...rows.map((r) => Math.max(r.avgActual || 0, r.avgSla || 0)))
   return (
     <Section title="SLA Compliance" sub="Rata-rata hari aktual vs SLA per stage (stage selesai)">
       <div className="card p-3">
+        {byCat && <select className="inp mb-3 py-2" value={cat} onChange={(e) => setCat(e.target.value)}>
+          <option value="">Semua kategori</option>{order.map((k) => <option key={k} value={k}>{categories[k].label}</option>)}</select>}
         {!has && <div className="mb-2 text-xs text-char/60">Belum ada stage selesai dengan tanggal aktual lengkap.</div>}
         {rows.map((r) => {
           const over = r.avgActual != null && r.avgSla != null && r.avgActual > r.avgSla

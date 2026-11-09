@@ -30,10 +30,24 @@ export default function Saya({ state, reload, onLogout }) {
           </button>
         )) : <Empty>Tidak ada tugas aktif untuk Anda.</Empty>}
       </Section>
+      <ReportLink token={state.settings.shareToken} />
       <Profile me={me} />
       {head && <Admin state={state} reload={reload} />}
       <button className="btn-o mb-10 w-full" onClick={onLogout}>Logout</button>
     </div>
+  )
+}
+
+function ReportLink({ token }) {
+  const toast = useToast()
+  const link = `${window.location.origin}/laporan?t=${token}`
+  return (
+    <Section title="Link Reporting" sub="Read-only untuk Direksi & All Divisi, tanpa login">
+      <div className="card grid grid-cols-2 gap-2 p-3">
+        <a className="btn-p text-xs" href={link} target="_blank" rel="noreferrer">Buka Reporting</a>
+        <button className="btn-o text-xs" onClick={() => navigator.clipboard.writeText(link).then(() => toast('Link tersalin')).catch(() => toast('Copy gagal', 'err'))}>Copy link</button>
+      </div>
+    </Section>
   )
 }
 

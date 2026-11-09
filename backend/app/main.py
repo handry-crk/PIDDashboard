@@ -16,6 +16,7 @@ from .auth import (hash_pin, verify_pin, new_session, current_member, is_head, i
                    lock_check, register_fail)
 from .db import get_db, clean, clean_all, ping
 from .seed import seed_whiteboard
+from .survey import router as survey_router, _survey_info
 
 from contextlib import asynccontextmanager
 
@@ -33,7 +34,8 @@ async def lifespan(app):
         sch.shutdown(wait=False)
 
 
-app = FastAPI(title="CRK PID Dashboard", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="CRK PID Dashboard", version="1.1.0", lifespan=lifespan)
+app.include_router(survey_router)
 
 
 @app.exception_handler(RequestValidationError)
@@ -159,11 +161,10 @@ def _project_detail(pid):
         k["hppByVersi"] = {v: D.compute_hpp(k["bom"], v) for v in versions}
         latest = versions[-1]
         k["hpp"] = k["hppByVersi"].get(latest, 0)
-        try:
-            harga = D.num((k.get("recipe") or {}).get("hargaJual")) or D.num((k.get("concept") or {}).get("hargaTarget"))
-        except ValueError:
-            harga = None
-        k["foodCostPct"] = round(k["hpp"] / float(harga) * 100, 1) if harga and k["hpp"] else None
+        k["porsiHpp"] = D.porsi_rows(k.get("recipe"), k.get("concept"), k["hpp"])
+        k["foodCostPct"] = k["porsiHpp"][0]["foodCostPct"]
+        fcs = [r["foodCostPct"] for r in k["porsiHpp"] if r["foodCostPct"] is not None]
+        k["maxFoodCostPct"] = max(fcs) if fcs else None
         k["halalWarnings"] = []
         for l in k["bom"]:
             if l.get("vendorId"):
@@ -175,8 +176,10 @@ def _project_detail(pid):
     kb = {pid: ks}
     ep = S.enrich_project(p, settings, kb)
     files = clean_all(db.files.find({"projectId": pid}))
+    for f in files:
+        f.pop("path", None)
     return {"project": ep, "kandidat": ks, "timeline": _timeline(pid), "files": files,
-            "targetFoodCostPct": settings["targetFoodCostPct"].get(p["category"], 35)}
+            "survey": _survey_info(pid), "targetFoodCostPct": settings["targetFoodCostPct"].get(p["category"], 35)}
 
 
 def _timeline(pid):
@@ -586,6 +589,8 @@ def delete_project(pid: str, me=Depends(current_member)):
     kids = [k["id"] for k in db.kandidat.find({"projectId": pid})]
     db.bom.delete_many({"kandidatId": {"$in": kids}})
     db.kandidat.delete_many({"projectId": pid})
+    db.surveys.delete_many({"projectId": pid})
+    db.responses.delete_many({"projectId": pid})
     db.projects.delete_one({"id": pid})
     return {"ok": True}
 
@@ -778,6 +783,8 @@ def _vendor_out(v):
     kids = {l["kandidatId"] for l in db.bom.find({"vendorId": v["id"]})}
     pids = {k["projectId"] for k in db.kandidat.find({"id": {"$in": list(kids)}})}
     v["usedIn"] = [{"id": p["id"], "kode": p["kode"], "nama": p["nama"]} for p in db.projects.find({"id": {"$in": list(pids)}})]
+    v["files"] = [{k: f.get(k) for k in ("id", "name", "url", "kind", "contentType", "at", "byName")}
+                  for f in db.files.find({"vendorId": v["id"]})]
     return v
 
 
@@ -834,7 +841,7 @@ def delete_vendor(vid: str, me=Depends(current_member)):
 # ======================= files =======================
 @app.post("/api/files")
 async def upload_file(file: UploadFile = File(...), projectId: str = Form(""), kandidatId: str = Form(""),
-                      vendorId: str = Form(""), kind: str = Form("photo"), me=Depends(current_member)):
+                      vendorId: str = Form(""), kind: str = Form("photo"), stage: int = Form(0), me=Depends(current_member)):
     require(me["role"] != "viewer", "Viewer tidak dapat upload file")
     data = await file.read()
     if len(data) > 10 * 1024 * 1024:
@@ -858,9 +865,32 @@ async def upload_file(file: UploadFile = File(...), projectId: str = Form(""), k
         f.write(data)
     meta = {"id": fid, "name": file.filename, "path": path, "contentType": ctype, "size": len(data), "kind": kind,
             "projectId": projectId or None, "kandidatId": kandidatId or None, "vendorId": vendorId or None,
-            "byName": me["name"], "at": D.now_utc_iso(), "url": f"/api/files/{fid}"}
+            "stage": stage or None, "byId": me["id"], "byName": me["name"], "at": D.now_utc_iso(), "url": f"/api/files/{fid}"}
     get_db().files.insert_one(meta)
-    return clean(meta)
+    if kind == "photo" and kandidatId:
+        get_db().kandidat.update_one({"id": kandidatId}, {"$addToSet": {"photos": meta["url"]}})
+    if projectId:
+        S.log_activity(projectId, me, "file", to=stage or None, note=f"Upload {file.filename}", kandidat_id=kandidatId or None)
+    out = clean(meta)
+    out.pop("path", None)
+    return out
+
+
+@app.delete("/api/files/{fid}")
+def delete_file(fid: str, me=Depends(current_member)):
+    db = get_db()
+    m = db.files.find_one({"id": fid})
+    if not m:
+        raise HTTPException(404, "File tidak ditemukan")
+    require(is_editor(me) or m.get("byId") == me["id"], "Hanya pengupload atau PID Supervisor / Head yang dapat menghapus file")
+    db.files.delete_one({"id": fid})
+    url = f"/api/files/{fid}"
+    db.kandidat.update_many({"photos": url}, {"$pull": {"photos": url}})
+    try:
+        os.remove(m["path"])
+    except OSError:
+        pass
+    return {"ok": True}
 
 
 @app.get("/api/files/{fid}")

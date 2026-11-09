@@ -75,6 +75,7 @@ export default function Proyek({ state, reload }) {
   const editor = ['pid_head', 'pid_supervisor'].includes(state.me.role) || state.me.isAdmin
   const [filter, setFilter] = useState(() => { try { const f = sessionStorage.getItem('pid_filter'); sessionStorage.removeItem('pid_filter'); return f || 'aktif' } catch { return 'aktif' } })
   const [cat, setCat] = useState('')
+  const [stage, setStage] = useState(0)
   const [q, setQ] = useState('')
   const [presetSlot, setPresetSlot] = useState(null)
   const [openNew, setOpenNew] = useState(false)
@@ -84,6 +85,7 @@ export default function Proyek({ state, reload }) {
   const list = useMemo(() => state.projects.filter((p) => {
     const st = p.flags.effectiveStatus
     if (cat && p.category !== cat) return false
+    if (stage && p.currentStage !== stage) return false
     if (q && !`${p.nama} ${p.kode} ${(p.kandidatNames || []).join(' ')}`.toLowerCase().includes(q.toLowerCase())) return false
     switch (filter) {
       case 'aktif': return !['done', 'dropped'].includes(p.status)
@@ -94,7 +96,7 @@ export default function Proyek({ state, reload }) {
       case 'dropped': return p.status === 'dropped'
       default: return true
     }
-  }), [state.projects, filter, cat, q])
+  }), [state.projects, filter, cat, q, stage])
 
   return (
     <div>
@@ -107,6 +109,12 @@ export default function Proyek({ state, reload }) {
         {[['', 'Semua kategori'], ...c.categoryOrder.map((k) => [k, c.categories[k].label])].map(([k, l]) =>
           <button key={k} onClick={() => setCat(k)} className={`min-h-[34px] shrink-0 rounded-full px-3 text-xs font-semibold ${cat === k ? 'bg-char text-cream' : 'bg-tint2 text-char/80'}`}>{l}</button>)}
       </div>
+      <div className="no-scrollbar -mx-4 mb-4 flex gap-1.5 overflow-x-auto px-4">
+        <button onClick={() => setStage(0)} className={`min-h-[34px] shrink-0 rounded-full px-3 text-xs font-semibold ${!stage ? 'bg-hijau text-white' : 'border border-hijau text-hijau'}`}>Semua stage</button>
+        {c.stages.map((s) => <button key={s.n} onClick={() => setStage(s.n)} title={s.nama}
+          className={`min-h-[34px] shrink-0 rounded-full px-3 text-xs font-bold ${stage === s.n ? 'bg-hijau text-white' : 'border border-hijau text-hijau'}`}>{s.roman}</button>)}
+      </div>
+      {stage > 0 && <div className="-mt-2 mb-3 text-xs text-char/65">Stage {c.stages[stage - 1].roman} · {c.stages[stage - 1].nama}</div>}
       {list.length ? <div className="grid gap-2.5 md:grid-cols-2">{list.map((p) => <ProjectCard key={p.id} p={p} stages={c.stages} categories={c.categories} onClick={() => go(`#/proyek/${p.id}`)} />)}</div>
         : <Empty>Tidak ada proyek untuk filter ini.</Empty>}
       {editor && <button onClick={() => { setPresetSlot(null); setOpenNew(true) }} className="fixed bottom-[80px] right-4 z-30 flex h-14 items-center gap-1 rounded-full bg-bata px-5 text-sm font-bold text-cream shadow-lg sm:hidden">+ Proyek</button>}

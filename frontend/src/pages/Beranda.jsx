@@ -33,7 +33,7 @@ export default function Beranda({ state, reload }) {
         </div>
         <div>
           <Funnel rows={state.funnel} />
-          <SlaCompliance rows={state.slaCompliance} />
+          <SlaCompliance rows={state.slaCompliance} byCat={state.slaComplianceByCat} categories={c.categories} order={c.categoryOrder} />
         </div>
       </div>
     </div>

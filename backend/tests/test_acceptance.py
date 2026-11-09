@@ -312,3 +312,88 @@ def test_full_lifecycle_to_launch(c):
     rep = c.get(f"/api/report?t={st['settings']['shareToken']}").json()
     assert any(x["id"] == pid for x in rep["launched"])
     assert next(x for x in rep["projects"] if x["id"] == pid)["foodCost"] == "sesuai target"
+
+
+def test_porsi_files_survey(c):
+    th = c.post("/api/auth/admin-login", json={"pin": "1234"}).json()["token"]
+    p = c.post("/api/projects", headers=H(th), json={"nama": "Saos Q3", "category": "varian_cimol", "subType": ["Saos"],
+                                                     "targetLaunch": "2027-09-01"}).json()["project"]
+    pid = p["id"]
+    k = c.post("/api/kandidat", headers=H(th), json={"projectId": pid, "nama": "Saos Keju Pedas"}).json()
+    k2 = c.post("/api/kandidat", headers=H(th), json={"projectId": pid, "nama": "Saos Mentai"}).json()
+    c.post(f"/api/projects/{pid}/stage", headers=H(th), json={"to": 2})
+    for kid in (k["id"], k2["id"]):
+        c.put(f"/api/kandidat/{kid}/scores", headers=H(th), json={"scores": {x: 4 for x in ("market", "harga", "ops", "bahan", "diferensiasi")}})
+    c.post(f"/api/projects/{pid}/stage", headers=H(th), json={"to": 3})
+    c.post(f"/api/projects/{pid}/skip", headers=H(th), json={"reason": "Konsep sudah dari Direksi"})
+    c.post(f"/api/projects/{pid}/skip", headers=H(th), json={"reason": "Direksi sudah setuju konsep"})
+    assert c.get(f"/api/projects/{pid}", headers=H(th)).json()["project"]["currentStage"] == 5
+    # porsi HPP: base 3.000/porsi kecil; besar x1,6 => 4.800
+    c.post(f"/api/kandidat/{k['id']}/bom", headers=H(th), json={"bahan": "Saos keju", "qty": 30, "unit": "g", "hargaPerUnit": 100000})
+    c.put(f"/api/kandidat/{k['id']}", headers=H(th), json={"recipe": {"porsi": [
+        {"nama": "Kecil", "multiplier": 1, "hargaJual": 12000}, {"nama": "Besar", "multiplier": "1,6", "hargaJual": "18.000"}]}})
+    d = c.get(f"/api/projects/{pid}", headers=H(th)).json()
+    kk = next(x for x in d["kandidat"] if x["id"] == k["id"])
+    assert [(r["nama"], r["hpp"], r["foodCostPct"]) for r in kk["porsiHpp"]] == [("Kecil", 3000, 25.0), ("Besar", 4800, 26.7)]
+    assert kk["maxFoodCostPct"] == 26.7
+    # stage attachment upload + delete (also removes it from kandidat photos)
+    r = c.post("/api/files", headers=H(th), files={"file": ("sop.pdf", b"%PDF-1.4 test", "application/pdf")},
+               data={"projectId": pid, "stage": "5", "kind": "attachment"})
+    f = r.json()
+    assert r.status_code == 200 and f["stage"] == 5 and "path" not in f
+    d = c.get(f"/api/projects/{pid}", headers=H(th)).json()
+    assert any(x["id"] == f["id"] for x in d["files"])
+    assert c.delete(f"/api/files/{f['id']}", headers=H(th)).status_code == 200
+    assert c.get(f["url"]).status_code == 404
+    # vendor attachments
+    v = c.post("/api/vendors", headers=H(th), json={"nama": "Vendor Saos"}).json()
+    c.post("/api/files", headers=H(th), files={"file": ("pricelist.pdf", b"%PDF", "application/pdf")}, data={"vendorId": v["id"], "kind": "pricelist"})
+    vs = c.get("/api/vendors", headers=H(th)).json()
+    assert next(x for x in vs if x["id"] == v["id"])["files"][0]["name"] == "pricelist.pdf"
+
+    # ---- survey ----
+    c.put(f"/api/kandidat/{k['id']}", headers=H(th), json={"photos": ["/api/files/x"]})
+    c.put(f"/api/kandidat/{k2['id']}", headers=H(th), json={"photos": ["/api/files/y"]})
+    c.post(f"/api/kandidat/{k2['id']}/bom", headers=H(th), json={"bahan": "Mentai", "qty": 20, "unit": "g", "hargaPerUnit": 150000})
+    assert c.post(f"/api/projects/{pid}/stage", headers=H(th), json={"to": 6}).status_code == 200
+    c.put(f"/api/projects/{pid}/stages/6", headers=H(th), json={"details": {"respondenTarget": 3, "lokasi": "Outlet Braga"}})
+    info = c.post(f"/api/projects/{pid}/survey", headers=H(th), json={"action": "open"}).json()
+    assert info["open"] is True and info["count"] == 0
+    tok = info["token"]
+    pub = c.get(f"/api/survey/{tok}").json()
+    assert pub["open"] and pub["lokasi"] == "Outlet Braga" and {x["nama"] for x in pub["kandidat"]} == {"Saos Keju Pedas", "Saos Mentai"}
+    assert next(x for x in pub["kandidat"] if x["id"] == k["id"])["porsi"] == ["Kecil", "Besar"]
+    assert "hpp" not in str(pub).lower() and "harga" not in str(pub["kandidat"]).lower()
+    ans = lambda rasa, intent, ok, porsi="Kecil", cm="": {"kandidatId": k["id"], "rasa": rasa, "tekstur": 4, "porsiScore": 3, "harga": 4,
+                                                           "intent": intent, "priceOk": ok, "porsi": porsi, "comment": cm}
+    assert c.post(f"/api/survey/{tok}", json={"clientId": "a", "answers": [ans(5, "pasti", True, cm="Enak, pedasnya pas")]}).status_code == 200
+    assert c.post(f"/api/survey/{tok}", json={"clientId": "a", "answers": [ans(5, "pasti", True)]}).status_code == 409
+    assert c.post(f"/api/survey/{tok}", json={"clientId": "b", "answers": [ans(9, "pasti", True)]}).status_code == 400
+    assert c.post(f"/api/survey/{tok}", json={"clientId": "b", "answers": [{"kandidatId": k["id"]}]}).status_code == 400
+    c.post(f"/api/survey/{tok}", json={"clientId": "b", "answers": [ans(4, "mungkin", False, "Besar", "Kurang asin")]})
+    c.post(f"/api/survey/{tok}", json={"clientId": "c", "answers": [ans(3, "pasti", True),
+                                                                   {"kandidatId": k2["id"], "rasa": 4, "intent": "tidak"}]})
+    d = c.get(f"/api/projects/{pid}", headers=H(th)).json()
+    pr = next(x for x in d["kandidat"] if x["id"] == k["id"])["testResult"]["prototipe"]
+    assert pr["n"] == 3 and pr["rasa"] == 4.0 and pr["intentPasti"] == 67 and pr["priceAcceptance"] == 67
+    assert pr["byPorsi"]["Besar"]["n"] == 1 and "Kurang asin" in pr["feedback"]
+    assert d["project"]["stages"][5]["details"]["respondenActual"] == 3
+    # target reached -> closed
+    st = c.get(f"/api/survey/{tok}").json()
+    assert st["open"] is False and "Target" in st["reason"]
+    assert c.post(f"/api/survey/{tok}", json={"clientId": "d", "answers": [ans(5, "pasti", True)]}).status_code == 400
+    # gate VI now satisfied by survey count
+    c.post(f"/api/projects/{pid}/decision", headers=H(th), json={"decision": "go"})
+    assert c.post(f"/api/projects/{pid}/stage", headers=H(th), json={"to": 7}).status_code == 200
+    # team views + csv + delete response recomputes
+    rows = c.get(f"/api/projects/{pid}/survey", headers=H(th)).json()["rows"]
+    assert len(rows) == 3 and "clientId" not in rows[0]
+    csvt = c.get(f"/api/projects/{pid}/survey.csv", headers=H(th)).text
+    assert "Saos Mentai" in csvt and "Kurang asin" in csvt
+    c.delete(f"/api/responses/{rows[0]['id']}", headers=H(th))
+    d = c.get(f"/api/projects/{pid}", headers=H(th)).json()
+    assert d["project"]["stages"][5]["details"]["respondenActual"] == 2
+    assert c.get("/api/survey/salah").status_code == 404
+    # SLA compliance per category
+    st = c.get("/api/state", headers=H(th)).json()
+    assert set(st["slaComplianceByCat"]) == {"varian_cimol", "minuman", "online_food", "new_brand"}

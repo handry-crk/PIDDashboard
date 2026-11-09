@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { api, download } from '../api.js'
 import { go } from '../App.jsx'
 import { Empty, Field, Pill, Sheet, Title, useToast, fmtTgl, VSTATUS } from '../ui.jsx'
+import { Attachments } from '../attachments.jsx'
 
 const VCOL = { prospek: '#8A8378', sampling: '#B8741A', approved: '#2F6B4A', blacklist: '#B42F27' }
 const BLANK = { nama: '', kategoriBahan: 'Protein', produkBahan: [], kontakNama: '', kontakHp: '', email: '', alamat: '', kota: '', moq: '', leadTimeHari: '',
@@ -76,6 +77,9 @@ export default function Vendor({ state }) {
             ['Halal', view.sertifikatHalal ? `${view.halalNomor || 'Ya'} · exp ${fmtTgl(view.halalExpiry)}` : 'Tidak'], ['Catatan', view.catatan]].map(([l, v]) =>
             <div key={l} className="flex justify-between gap-3 border-b border-line py-2"><span className="text-char/60">{l}</span><span className="text-right font-semibold">{v || '-'}</span></div>)}
           {view.kontakHp && <div className="mt-3 grid grid-cols-2 gap-2"><a className="btn-o" href={`tel:${view.kontakHp}`}>Telepon</a><a className="btn-o" href={wa(view.kontakHp)} target="_blank" rel="noreferrer">WhatsApp</a></div>}
+          <div className="mb-1 mt-4 text-[13px] font-bold">Lampiran (price list, sertifikat halal)</div>
+          <Attachments files={view.files || []} params={{ vendorId: view.id, kind: 'vendor' }} can={editor} label="Lampiran vendor"
+            onChange={async () => { const vs = await api('/api/vendors'); setList(vs); setView(vs.find((x) => x.id === view.id) || null) }} />
           <div className="mt-4 text-[13px] font-bold">Dipakai di proyek</div>
           {view.usedIn?.length ? view.usedIn.map((p) => <button key={p.id} className="mt-1 block text-left text-bata underline" onClick={() => go(`#/proyek/${p.id}`)}>{p.kode} · {p.nama}</button>) : <div className="text-char/60">Belum dipakai</div>}
         </div>}

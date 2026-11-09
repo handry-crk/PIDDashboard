@@ -9,6 +9,7 @@ import Keputusan from './pages/Keputusan.jsx'
 import Vendor from './pages/Vendor.jsx'
 import Saya from './pages/Saya.jsx'
 import Laporan from './pages/Laporan.jsx'
+import Survey from './pages/Survey.jsx'
 
 function useHash() {
   const [h, setH] = useState(window.location.hash || '#/beranda')
@@ -85,7 +86,8 @@ function Shell() {
             <div className="mt-0.5 text-[11px] text-char/60">Product Innovation Development</div>
           </div>
           <div className="flex flex-col items-end gap-0.5">
-            <Logo />
+            <a href={`/laporan?t=${state.settings.shareToken}`} target="_blank" rel="noreferrer" className="rounded-full border border-bata px-2.5 py-1 text-[11px] font-bold text-bata sm:hidden">Reporting ↗</a>
+            <span className="hidden sm:block"><Logo /></span>
             <div className="flex items-center gap-1 text-[10px] text-char/50"><span className={`h-1.5 w-1.5 rounded-full ${err ? 'bg-amber' : 'bg-hijau'}`} />{err ? 'Offline' : `Refresh ${fmtWhen(refreshedAt).split(' ').pop()}`}</div>
           </div>
         </div>
@@ -124,6 +126,6 @@ function Shell() {
 }
 
 export default function App() {
-  const isReport = window.location.pathname.startsWith('/laporan')
-  return <ToastProvider>{isReport ? <Laporan /> : <Shell />}</ToastProvider>
+  const path = window.location.pathname
+  return <ToastProvider>{path.startsWith('/laporan') ? <Laporan /> : path.startsWith('/survey/') ? <Survey /> : <Shell />}</ToastProvider>
 }

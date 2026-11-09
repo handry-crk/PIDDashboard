@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react'
-import { api } from '../api.js'
+import { api, download } from '../api.js'
 import { go } from '../App.jsx'
+import { Attachments } from '../attachments.jsx'
+import QRCode from 'qrcode'
 import {
   Empty, Field, Pill, Sheet, StatusPill, Stepper, Title, useToast, fmtTgl, fmtRp, fmtPct, fmtWhen, fmtNum,
   KSTATUS, ROMAN, slaText, STATUS,
@@ -164,14 +166,18 @@ export default function ProjectDetail({ id, state, reload }) {
 
         {active === 1 && <Stage1 d={d} id={id} c={c} editor={editor && !closed} run={run} saveK={saveK} />}
         {active === 2 && <Stage2 d={d} settings={settings} editor={editor && !closed} run={run} saveK={saveK} />}
-        {active === 3 && <Stage3 ks={visibleK} editor={editor && !closed} saveK={saveK} />}
+        {active === 3 && <Stage3 ks={visibleK} editor={editor && !closed} saveK={saveK} files={d.files} id={id} reload={load} />}
         {active === 4 && <Stage4 st={st} ks={visibleK} editor={editor && !closed} saveDet={saveDet} saveK={saveK} />}
-        {active === 5 && <Stage5 d={d} id={id} ks={visibleK} state={state} p={p} can={canEditStage(5) && !closed} run={run} saveK={saveK} saveDet={saveDet} st={st} />}
-        {active === 6 && <Stage6 st={st} ks={visibleK} can={canEditStage(6) && !closed} saveDet={saveDet} saveK={saveK} />}
+        {active === 5 && <Stage5 d={d} id={id} ks={visibleK} state={state} p={p} can={canEditStage(5) && !closed} run={run} saveK={saveK} saveDet={saveDet} st={st} reload={load} />}
+        {active === 6 && <Stage6 st={st} ks={visibleK} can={canEditStage(6) && !closed} saveDet={saveDet} saveK={saveK} d={d} id={id} reload={load} />}
         {active === 7 && <Stage7 st={st} p={p} d={d} editor={editor && !closed} saveDet={saveDet} run={run} id={id} targetFc={d.targetFoodCostPct} />}
 
         <Box title="Catatan stage">
           <Auto rows={3} value={st.notes} disabled={!canEditStage(active) || closed} onSave={(v) => saveStage(active, { notes: v })} placeholder="Catatan, blocker, link referensi…" />
+        </Box>
+        <Box title={`Lampiran stage ${ROMAN[active - 1]}`} right={<span className="text-[11px] text-char/55">foto, PDF, Excel · maks 10 MB</span>}>
+          <Attachments files={d.files.filter((f) => f.stage === active && !f.kandidatId)} params={{ projectId: id, stage: active, kind: 'attachment' }}
+            can={(editor || staff) && !closed} onChange={load} label="Lampiran" />
         </Box>
       </div>
 
@@ -310,7 +316,7 @@ function ScoreCard({ k, crit, pass, editor, run, saveK }) {
 
 /* ---------- Stage III ---------- */
 const CHANNELS = ['Outlet Kiosk', 'Gerobak', 'Online Food', 'Frozen/Marketplace', 'Event']
-function Stage3({ ks, editor, saveK }) {
+function Stage3({ ks, editor, saveK, files, id, reload }) {
   if (!ks.length) return <div className="mb-3"><Empty>Belum ada kandidat yang lolos screening.</Empty></div>
   return ks.map((k) => {
     const cc = k.concept || {}
@@ -334,6 +340,9 @@ function Stage3({ ks, editor, saveK }) {
           <Field label="Est. food cost"><div className="inp bg-transparent">{cc.hargaTarget && cc.estHpp ? fmtPct(cc.estHpp / cc.hargaTarget * 100) : '-'}</div></Field>
         </div>
         <Field label="Key message"><Auto rows={2} value={cc.keyMessage} disabled={!editor} onSave={sv('keyMessage')} /></Field>
+        <div className="lbl">Mood photo / referensi visual</div>
+        <Attachments files={files.filter((f) => f.kandidatId === k.id && f.kind === 'mood')} params={{ projectId: id, kandidatId: k.id, kind: 'mood', stage: 3 }}
+          can={editor} onChange={reload} imagesOnly label="Mood" />
       </Box>
     )
   })
@@ -368,7 +377,7 @@ function Stage4({ st, ks, editor, saveDet, saveK }) {
 }
 
 /* ---------- Stage V ---------- */
-function Stage5({ d, id, ks, state, p, can, run, saveK, saveDet, st }) {
+function Stage5({ d, id, ks, state, p, can, run, saveK, saveDet, st, reload }) {
   const [vendors, setVendors] = useState([])
   useEffect(() => { api('/api/vendors').then(setVendors).catch(() => {}) }, [])
   const det = st.details || {}
@@ -376,46 +385,96 @@ function Stage5({ d, id, ks, state, p, can, run, saveK, saveDet, st }) {
   return (
     <>
       <Box title="Info prototipe">
-        <Field label="Varian porsi (pisahkan koma)"><Auto value={(det.porsi || []).join(', ')} disabled={!can} onSave={(v) => saveDet(5, 'porsi')(v.split(',').map((x) => x.trim()).filter(Boolean))} placeholder="Kecil, Besar" /></Field>
+        <Field label="Template porsi untuk semua kandidat (pisahkan koma)"><Auto value={(det.porsi || []).join(', ')} disabled={!can} onSave={(v) => saveDet(5, 'porsi')(v.split(',').map((x) => x.trim()).filter(Boolean))} placeholder="Kecil, Besar" /></Field>
       </Box>
-      {ks.map((k) => <ProtoCard key={k.id} k={k} id={id} p={p} vendors={vendors} can={can} run={run} saveK={saveK} targetFc={d.targetFoodCostPct} />)}
+      {ks.map((k) => <ProtoCard key={k.id} k={k} id={id} p={p} vendors={vendors} can={can} run={run} saveK={saveK} targetFc={d.targetFoodCostPct}
+        files={d.files} reload={reload} template={det.porsi} />)}
     </>
   )
 }
-function ProtoCard({ k, id, p, vendors, can, run, saveK, targetFc }) {
+function PorsiTable({ k, r, can, saveK, targetFc, template }) {
+  const rows = (r.porsi && r.porsi.length) ? r.porsi : null
+  const [edit, setEdit] = useState(null)
+  const start = () => setEdit((rows || (template?.length ? template.map((n, i) => ({ nama: n, multiplier: i === 0 ? 1 : '', hargaJual: '' }))
+    : [{ nama: 'Standar', multiplier: 1, hargaJual: r.hargaJual ?? '' }])).map((x) => ({ ...x, multiplier: showNumP(x.multiplier), hargaJual: showNumP(x.hargaJual) })))
+  const save = () => {
+    const out = []
+    for (const x of edit) {
+      if (!x.nama.trim()) continue
+      const m = parseNum(x.multiplier), h = parseNum(x.hargaJual)
+      if (Number.isNaN(m) || Number.isNaN(h)) return alert('Multiplier / harga tidak valid. Contoh: 1,6 dan 18.000')
+      out.push({ nama: x.nama.trim(), multiplier: m || 1, hargaJual: h })
+    }
+    saveK(k.id, { recipe: { porsi: out } }).then(() => setEdit(null))
+  }
+  return (
+    <div className="mb-3">
+      <div className="mb-1 flex items-center justify-between"><div className="text-[12px] font-bold">HPP & food cost per porsi</div>
+        {can && !edit && <button className="text-xs font-semibold text-bata underline" onClick={start}>Atur porsi</button>}</div>
+      {!edit ? (
+        <div className="overflow-hidden rounded-lg border border-line">
+          <table className="w-full text-[12px]">
+            <thead className="bg-bata text-cream"><tr><th className="px-2 py-1.5 text-left">Porsi</th><th className="px-1 text-right">×</th><th className="px-1 text-right">HPP</th><th className="px-1 text-right">Harga</th><th className="px-2 text-right">FC</th></tr></thead>
+            <tbody>{k.porsiHpp.map((x) => {
+              const over = x.foodCostPct != null && x.foodCostPct > targetFc
+              return <tr key={x.nama} className="border-t border-line">
+                <td className="px-2 py-1.5 font-semibold">{x.nama}</td><td className="px-1 text-right">{showNumP(x.multiplier)}</td>
+                <td className="px-1 text-right font-semibold text-bata">{fmtRp(x.hpp)}</td><td className="px-1 text-right">{fmtRp(x.hargaJual)}</td>
+                <td className={`px-2 text-right font-bold ${x.foodCostPct == null ? '' : over ? 'text-amber' : 'text-hijau'}`}>{fmtPct(x.foodCostPct)}</td></tr>
+            })}</tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="rounded-lg border border-dashed border-line p-2">
+          <div className="mb-1 grid grid-cols-[1fr_64px_1fr_28px] gap-1.5 text-[10.5px] font-semibold text-char/60"><span>Nama porsi</span><span>Multiplier</span><span>Harga jual (Rp)</span><span /></div>
+          {edit.map((x, i) => (
+            <div key={i} className="mb-1.5 grid grid-cols-[1fr_64px_1fr_28px] gap-1.5">
+              <input className="inp px-2" value={x.nama} onChange={(e) => setEdit(edit.map((y, j) => j === i ? { ...y, nama: e.target.value } : y))} placeholder="Kecil" />
+              <input className="inp px-2" inputMode="decimal" value={x.multiplier} onChange={(e) => setEdit(edit.map((y, j) => j === i ? { ...y, multiplier: e.target.value } : y))} placeholder="1" />
+              <input className="inp px-2" inputMode="decimal" value={x.hargaJual} onChange={(e) => setEdit(edit.map((y, j) => j === i ? { ...y, hargaJual: e.target.value } : y))} placeholder="15.000" />
+              <button className="text-lg text-bata" onClick={() => setEdit(edit.filter((_, j) => j !== i))}>×</button>
+            </div>
+          ))}
+          <div className="mb-2 text-[10.5px] text-char/60">BOM diisi untuk porsi multiplier 1. Porsi lain dihitung otomatis (mis. Besar 1,6 = 1,6× bahan).</div>
+          <div className="grid grid-cols-3 gap-2">
+            <button className="btn-g border border-line text-xs" onClick={() => setEdit([...edit, { nama: '', multiplier: '', hargaJual: '' }])}>+ Porsi</button>
+            <button className="btn-g border border-line text-xs" onClick={() => setEdit(null)}>Batal</button>
+            <button className="btn-p text-xs" onClick={save}>Simpan</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+const showNumP = (n) => (n === null || n === undefined || n === '') ? '' : String(n).replace('.', ',')
+
+function ProtoCard({ k, id, p, vendors, can, run, saveK, targetFc, files, reload, template }) {
   const r = k.recipe || {}
   const sv = (key) => (v) => saveK(k.id, { recipe: { [key]: v } })
   const [line, setLine] = useState({ bahan: '', qty: '', unit: 'g', hargaPerUnit: '', vendorId: '', inhouse: false, versi: r.versi || 'v1' })
-  const [busy, setBusy] = useState(false)
   const addLine = () => {
     const qty = parseNum(line.qty), harga = parseNum(line.hargaPerUnit)
     if (Number.isNaN(qty) || Number.isNaN(harga)) return run(() => Promise.reject(new Error('Qty / harga tidak valid. Contoh: 4,5 atau 120.000')))
-    return run(() => api(`/api/kandidat/${k.id}/bom`, { method: 'POST', body: { ...line, qty, hargaPerUnit: harga, vendorId: line.vendorId || null } }), 'Bahan ditambahkan')
+    return run(() => api(`/api/kandidat/${k.id}/bom`, { method: 'POST', body: { ...line, versi: r.versi || line.versi, qty, hargaPerUnit: harga, vendorId: line.vendorId || null } }), 'Bahan ditambahkan')
       .then((ok) => ok && setLine({ ...line, bahan: '', qty: '', hargaPerUnit: '', vendorId: '', inhouse: false }))
   }
-  const upload = async (e) => {
-    const file = e.target.files[0]; if (!file) return
-    setBusy(true)
-    const fd = new FormData(); fd.append('file', file); fd.append('projectId', id); fd.append('kandidatId', k.id); fd.append('kind', 'photo')
-    try { const m = await api('/api/files', { method: 'POST', form: fd }); await saveK(k.id, { photos: [...(k.photos || []), m.url] }) } catch (er) { alert(er.message) } finally { setBusy(false); e.target.value = '' }
-  }
-  const fcOver = k.foodCostPct != null && k.foodCostPct > targetFc
+  const fcOver = k.maxFoodCostPct != null && k.maxFoodCostPct > targetFc
   const selectable = vendors.filter((v) => v.statusVendor !== 'blacklist')
+  const photos = files.filter((f) => f.kandidatId === k.id && f.kind === 'photo')
   return (
     <Box title={`Prototipe · ${k.nama}`}>
-      <div className="mb-3 grid grid-cols-3 gap-2 text-center">
-        <div className="rounded-lg bg-tint2 p-2"><div className="text-[10.5px] text-char/60">HPP/porsi</div><div className="text-[15px] font-extrabold text-bata">{fmtRp(k.hpp)}</div></div>
-        <div className="rounded-lg bg-tint2 p-2"><div className="text-[10.5px] text-char/60">Harga jual</div><div className="text-[15px] font-extrabold">{fmtRp(r.hargaJual)}</div></div>
-        <div className={`rounded-lg p-2 ${fcOver ? 'bg-[#F5E6CC]' : 'bg-[#DCEADF]'}`}><div className="text-[10.5px] text-char/60">Food cost</div><div className={`text-[15px] font-extrabold ${fcOver ? 'text-amber' : 'text-hijau'}`}>{fmtPct(k.foodCostPct)}</div></div>
+      <div className="mb-3 grid grid-cols-2 gap-2 text-center">
+        <div className="rounded-lg bg-tint2 p-2"><div className="text-[10.5px] text-char/60">HPP porsi dasar ({r.versi || 'v1'})</div><div className="text-[16px] font-extrabold text-bata">{fmtRp(k.hpp)}</div></div>
+        <div className={`rounded-lg p-2 ${k.maxFoodCostPct == null ? 'bg-tint2' : fcOver ? 'bg-[#F5E6CC]' : 'bg-[#DCEADF]'}`}><div className="text-[10.5px] text-char/60">Food cost tertinggi</div>
+          <div className={`text-[16px] font-extrabold ${k.maxFoodCostPct == null ? '' : fcOver ? 'text-amber' : 'text-hijau'}`}>{fmtPct(k.maxFoodCostPct)}</div></div>
       </div>
-      {fcOver && <div className="mb-2 text-xs font-semibold text-amber">Food cost di atas target {targetFc}%.</div>}
+      {fcOver && <div className="mb-2 text-xs font-semibold text-amber">Ada porsi dengan food cost di atas target {targetFc}%.</div>}
       {k.halalWarnings?.length > 0 && <div className="mb-2 rounded-lg bg-[#F5E6CC] p-2 text-xs">Sertifikat halal vendor akan habis &lt; 30 hari: {k.halalWarnings.join(', ')}</div>}
-      <div className="grid grid-cols-2 gap-2">
-        <Field label="Versi resep"><Auto value={r.versi || 'v1'} disabled={!can} onSave={sv('versi')} /></Field>
-        <Field label="Harga jual (Rp)"><Auto type="number" value={r.hargaJual} disabled={!can} onSave={sv('hargaJual')} /></Field>
-      </div>
+      <PorsiTable k={k} r={r} can={can} saveK={saveK} targetFc={targetFc} template={template} />
+      <Field label="Versi resep aktif"><Auto value={r.versi || 'v1'} disabled={!can} onSave={sv('versi')} /></Field>
+      {Object.keys(k.hppByVersi || {}).length > 1 && <div className="mb-2 text-[11px] text-char/65">HPP per versi: {Object.entries(k.hppByVersi).map(([v, h]) => `${v} ${fmtRp(h)}`).join(' · ')}</div>}
 
-      <div className="mb-1 mt-1 text-[12px] font-bold">BOM / resep per porsi</div>
+      <div className="mb-1 mt-1 text-[12px] font-bold">BOM / resep porsi dasar</div>
       <div className="mb-2 overflow-hidden rounded-lg border border-line">
         <table className="w-full text-[12px]">
           <thead className="bg-bata text-cream"><tr><th className="px-2 py-1.5 text-left">Bahan</th><th className="px-1 text-right">Qty</th><th className="px-2 text-right">Biaya</th><th className="w-7" /></tr></thead>
@@ -424,7 +483,7 @@ function ProtoCard({ k, id, p, vendors, can, run, saveK, targetFc }) {
               <tr key={l.id} className="border-t border-line">
                 <td className="px-2 py-1.5"><div className="font-semibold">{l.bahan} <span className="text-[10px] font-normal text-abu">{l.versi}</span></div>
                   <div className="text-[10.5px] text-char/55">{l.vendorNama || (l.inhouse ? 'In-house' : '-')} · {fmtRp(l.hargaPerUnit)}/{l.unit === 'pcs' ? 'pcs' : l.unit === 'ml' ? 'liter' : 'kg'}</div></td>
-                <td className="px-1 text-right">{fmtNum(l.qty, l.qty % 1 ? 1 : 0)} {l.unit}</td>
+                <td className="px-1 text-right">{showNumP(l.qty)} {l.unit}</td>
                 <td className="px-2 text-right font-semibold">{fmtRp(l.biayaPerPorsi)}</td>
                 <td>{can && <button className="h-8 w-7 text-bata" onClick={() => run(() => api(`/api/bom/${l.id}`, { method: 'DELETE' }))}>×</button>}</td>
               </tr>
@@ -454,20 +513,65 @@ function ProtoCard({ k, id, p, vendors, can, run, saveK, targetFc }) {
         <Field label="Packaging"><Auto value={r.packaging} disabled={!can} onSave={sv('packaging')} /></Field>
       </div>
       <Field label="SOP draft"><Auto rows={3} value={r.sop} disabled={!can} onSave={sv('sop')} placeholder="Langkah penyajian di outlet" /></Field>
-      <div className="mb-1 text-[12px] font-bold">Foto prototipe</div>
-      <div className="flex flex-wrap gap-2">
-        {(k.photos || []).map((u) => <a key={u} href={u} target="_blank" rel="noreferrer"><img src={u} alt="" className="h-20 w-20 rounded-lg border border-line object-cover" /></a>)}
-        {can && <label className={`flex h-20 w-20 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-bata text-center text-[11px] font-semibold text-bata ${busy ? 'opacity-50' : ''}`}>
-          {busy ? 'Upload…' : <>📷<span>Upload</span></>}<input type="file" accept="image/*" capture="environment" className="hidden" onChange={upload} /></label>}
-      </div>
+      <div className="mb-1 text-[12px] font-bold">Foto prototipe <span className="font-normal text-char/55">(wajib minimal 1)</span></div>
+      <Attachments files={photos} params={{ projectId: id, kandidatId: k.id, kind: 'photo', stage: 5 }} can={can} onChange={reload} imagesOnly label="Foto" />
     </Box>
   )
 }
 
 /* ---------- Stage VI ---------- */
-function Stage6({ st, ks, can, saveDet, saveK }) {
+function SurveyCard({ id, d, can, reload }) {
+  const toast = useToast()
+  const sv = d.survey
+  const [qr, setQr] = useState(null)
+  const [rows, setRows] = useState(null)
+  const url = sv ? `${window.location.origin}${sv.url}` : ''
+  useEffect(() => { if (url) QRCode.toDataURL(url, { margin: 1, width: 480, color: { dark: '#212121', light: '#ffffff' } }).then(setQr).catch(() => {}) }, [url])
+  const act = async (action, extra = {}) => {
+    try { await api(`/api/projects/${id}/survey`, { method: 'POST', body: { action, ...extra } }); reload() } catch (e) { toast(e.message, 'err') }
+  }
+  const loadRows = async () => { try { setRows((await api(`/api/projects/${id}/survey`)).rows) } catch (e) { toast(e.message, 'err') } }
+  if (!sv) return (
+    <Box title="Survey responden (QR)">
+      <div className="mb-2 text-xs text-char/70">Responden mengisi penilaian dari HP lewat QR di outlet. Hasil rata-rata, niat beli, dan jumlah responden terisi otomatis.</div>
+      {can ? <button className="btn-p w-full" onClick={() => act('open')}>Buat & buka survey</button> : <div className="text-xs text-char/55">Survey belum dibuat.</div>}
+    </Box>
+  )
+  return (
+    <Box title="Survey responden (QR)" right={<Pill color={sv.open ? '#2F6B4A' : '#8A8378'}>{sv.open ? 'Dibuka' : 'Ditutup'}</Pill>}>
+      <div className="mb-2 h-2.5 rounded-full bg-tint2"><div className="h-2.5 rounded-full bg-hijau" style={{ width: `${Math.min(100, (sv.count / (sv.target || 1)) * 100)}%` }} /></div>
+      <div className="mb-3 flex justify-between text-[12px]"><span><b>{sv.count}</b> dari {sv.target} responden</span>{sv.reason && <span className="text-char/60">{sv.reason}</span>}</div>
+      {qr && <div className="mb-2 flex flex-col items-center"><img src={qr} alt="QR survey" className="h-48 w-48 rounded-lg border border-line bg-white p-1" />
+        <a href={qr} download="qr-survey.png" className="mt-1 text-xs font-semibold text-bata underline">Download QR (untuk dicetak)</a></div>}
+      <div className="mb-2 break-all rounded-lg bg-cream p-2 text-[11px]">{url}</div>
+      <div className="grid grid-cols-2 gap-2">
+        <button className="btn-o text-xs" onClick={() => navigator.clipboard.writeText(url).then(() => toast('Link survey tersalin')).catch(() => toast('Copy gagal', 'err'))}>Copy link</button>
+        <a className="btn-o text-xs" href={url} target="_blank" rel="noreferrer">Buka form</a>
+        {can && (sv.manualOpen ? <button className="btn-g border border-line text-xs" onClick={() => act('close')}>Tutup survey</button>
+          : <button className="btn-p text-xs" onClick={() => act('open')}>Buka survey</button>)}
+        {can && <button className="btn-g border border-line text-xs" onClick={() => confirm('Ganti link? QR lama tidak berlaku lagi.') && act('regenerate')}>Ganti link</button>}
+      </div>
+      {can && <label className="mt-2 flex min-h-[40px] items-center gap-2 text-xs"><input type="checkbox" className="h-5 w-5 accent-bata" checked={sv.allowOverTarget} onChange={(e) => act('', { allowOverTarget: e.target.checked })} />Tetap terima responden setelah target tercapai</label>}
+      <div className="mt-2 flex gap-3 text-xs">
+        <button className="font-semibold text-bata underline" onClick={rows ? () => setRows(null) : loadRows}>{rows ? 'Sembunyikan respons' : 'Lihat respons'}</button>
+        {can && <button className="font-semibold text-bata underline" onClick={() => download(`/api/projects/${id}/survey.csv`, 'survey-responden.csv').catch((e) => toast(e.message, 'err'))}>Export CSV</button>}
+      </div>
+      {rows && <div className="mt-2 max-h-72 overflow-y-auto">
+        {rows.length ? rows.map((r) => (
+          <div key={r.id} className="mb-1.5 rounded-lg border border-line bg-white/50 p-2 text-[11.5px]">
+            <div className="flex justify-between"><b>{r.nama || 'Anonim'}</b><span className="text-char/55">{fmtWhen(r.at)}</span></div>
+            {r.answers.map((a, i) => <div key={i}>{d.kandidat.find((k) => k.id === a.kandidatId)?.nama || '-'}{a.porsi ? ` (${a.porsi})` : ''}: rasa {a.rasa}{a.intent ? ` · ${a.intent}` : ''}{a.comment ? ` · “${a.comment}”` : ''}</div>)}
+            {can && <button className="mt-1 text-[11px] text-bata underline" onClick={async () => { if (confirm('Delete respons ini?')) { await api(`/api/responses/${r.id}`, { method: 'DELETE' }); loadRows(); reload() } }}>Delete (spam/duplikat)</button>}
+          </div>)) : <div className="text-xs text-char/55">Belum ada respons.</div>}
+      </div>}
+    </Box>
+  )
+}
+
+function Stage6({ st, ks, can, saveDet, saveK, d, id, reload }) {
   const det = st.details || {}
   const tgt = det.respondenTarget ?? 30
+  const auto = det.respondenSource === 'survey'
   return (
     <>
       <Box title="Sesi pengujian prototipe">
@@ -476,27 +580,35 @@ function Stage6({ st, ks, can, saveDet, saveK }) {
           <Field label="Mulai"><Auto type="date" value={det.tanggalMulai} disabled={!can} onSave={saveDet(6, 'tanggalMulai')} /></Field>
           <Field label="Selesai"><Auto type="date" value={det.tanggalSelesai} disabled={!can} onSave={saveDet(6, 'tanggalSelesai')} /></Field>
           <Field label="Target responden"><Auto type="number" value={tgt} disabled={!can} onSave={saveDet(6, 'respondenTarget')} /></Field>
-          <Field label="Actual responden"><Auto type="number" value={det.respondenActual} disabled={!can} onSave={saveDet(6, 'respondenActual')} /></Field>
+          <Field label={auto ? 'Actual (dari survey)' : 'Actual responden'}><Auto type="number" value={det.respondenActual} disabled={!can || auto} onSave={saveDet(6, 'respondenActual')} /></Field>
         </div>
-        <div className="h-2.5 rounded-full bg-tint2"><div className="h-2.5 rounded-full bg-hijau" style={{ width: `${Math.min(100, ((Number(det.respondenActual) || 0) / (Number(tgt) || 1)) * 100)}%` }} /></div>
-        <div className="mt-1 text-right text-[11px] text-char/60">{det.respondenActual || 0} dari {tgt} responden</div>
       </Box>
+      <SurveyCard id={id} d={d} can={can} reload={reload} />
       {ks.map((k) => {
         const r = (k.testResult || {}).prototipe || {}
+        const fromSurvey = r.source === 'survey'
         const sv = (key) => (v) => saveK(k.id, { testResult: { prototipe: { ...r, [key]: v } } })
+        const dis = !can || fromSurvey
         return (
-          <Box key={k.id} title={`Hasil uji · ${k.nama}`} right={<Pill color={k.status === 'drop' ? '#8A8378' : '#2F6B4A'}>{KSTATUS[k.status]}</Pill>}>
-            {[['rasa', 'Rasa'], ['tekstur', 'Tekstur'], ['porsi', 'Porsi'], ['harga', 'Harga']].map(([key, lab]) => (
-              <div key={key} className="mb-2"><div className="mb-1 text-[12px] font-semibold">{lab} (rata-rata 1–5)</div>
-                <Auto type="number" value={r[key]} disabled={!can} onSave={sv(key)} placeholder="mis. 4,2" /></div>
-            ))}
-            <div className="grid grid-cols-3 gap-2">
-              <Field label="Pasti beli %"><Auto type="number" value={r.intentPasti} disabled={!can} onSave={sv('intentPasti')} /></Field>
-              <Field label="Mungkin %"><Auto type="number" value={r.intentMungkin} disabled={!can} onSave={sv('intentMungkin')} /></Field>
-              <Field label="Tidak %"><Auto type="number" value={r.intentTidak} disabled={!can} onSave={sv('intentTidak')} /></Field>
+          <Box key={k.id} title={`Hasil uji · ${k.nama}`} right={fromSurvey ? <Pill color="#2F6B4A">Survey · {r.n} jawaban</Pill> : <Pill color={k.status === 'drop' ? '#8A8378' : '#2F6B4A'}>{KSTATUS[k.status]}</Pill>}>
+            <div className="grid grid-cols-2 gap-2">
+              {[['rasa', 'Rasa'], ['tekstur', 'Tekstur'], ['porsi', 'Porsi'], ['harga', 'Harga']].map(([key, lab]) => (
+                <Field key={key} label={`${lab} (rata-rata 1–5)`}><Auto type="number" value={r[key]} disabled={dis} onSave={sv(key)} placeholder="mis. 4,2" /></Field>
+              ))}
             </div>
-            <Field label="Price acceptance di harga target (%)"><Auto type="number" value={r.priceAcceptance} disabled={!can} onSave={sv('priceAcceptance')} /></Field>
-            <Field label="Top 3 feedback"><Auto rows={3} value={r.feedback} disabled={!can} onSave={sv('feedback')} /></Field>
+            <div className="grid grid-cols-3 gap-2">
+              <Field label="Pasti beli %"><Auto type="number" value={r.intentPasti} disabled={dis} onSave={sv('intentPasti')} /></Field>
+              <Field label="Mungkin %"><Auto type="number" value={r.intentMungkin} disabled={dis} onSave={sv('intentMungkin')} /></Field>
+              <Field label="Tidak %"><Auto type="number" value={r.intentTidak} disabled={dis} onSave={sv('intentTidak')} /></Field>
+            </div>
+            <Field label="Price acceptance di harga target (%)"><Auto type="number" value={r.priceAcceptance} disabled={dis} onSave={sv('priceAcceptance')} /></Field>
+            {r.byPorsi && Object.keys(r.byPorsi).length > 0 && (
+              <div className="mb-3 overflow-hidden rounded-lg border border-line text-[12px]">
+                <table className="w-full"><thead className="bg-bata text-cream"><tr><th className="px-2 py-1 text-left">Porsi</th><th className="px-1 text-right">n</th><th className="px-1 text-right">Rasa</th><th className="px-1 text-right">Skor porsi</th><th className="px-2 text-right">Pasti beli</th></tr></thead>
+                  <tbody>{Object.entries(r.byPorsi).map(([n, x]) => <tr key={n} className="border-t border-line"><td className="px-2 py-1 font-semibold">{n}</td><td className="px-1 text-right">{x.n}</td><td className="px-1 text-right">{showNumP(x.rasa)}</td><td className="px-1 text-right">{showNumP(x.porsi)}</td><td className="px-2 text-right">{x.intentPasti ?? '-'}%</td></tr>)}</tbody></table>
+              </div>
+            )}
+            <Field label={fromSurvey ? 'Feedback terbaru' : 'Top 3 feedback'}><Auto rows={3} value={r.feedback} disabled={dis} onSave={sv('feedback')} /></Field>
           </Box>
         )
       })}

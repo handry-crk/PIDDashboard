@@ -20,9 +20,9 @@ function Evidence({ id, stage }) {
             <div className="font-bold">{k.nama}</div>
             <div className="text-char/75">
               Screening {k.screeningTotal != null ? String(k.screeningTotal).replace('.', ',') : '-'}
-              {k.hpp ? ` · HPP ${fmtRp(k.hpp)} · FC ${fmtPct(k.foodCostPct)}` : ''}
+              {k.hpp ? ` · ${k.porsiHpp.map((x) => `${x.nama} HPP ${fmtRp(x.hpp)} FC ${fmtPct(x.foodCostPct)}`).join(' · ')}` : ''}
               {stage === 4 && kr.appeal ? ` · Appeal ${kr.appeal}/5` : ''}
-              {stage === 6 && kr.rasa ? ` · Rasa ${kr.rasa} · Pasti beli ${kr.intentPasti ?? '-'}%` : ''}
+              {stage === 6 && kr.rasa ? ` · Rasa ${String(kr.rasa).replace('.', ',')} · Pasti beli ${kr.intentPasti ?? '-'}% · Harga OK ${kr.priceAcceptance ?? '-'}%${kr.n ? ` (${kr.n} responden)` : ''}` : ''}
             </div>
             {kr.catatan || kr.feedback ? <div className="mt-0.5 italic text-char/60">“{kr.catatan || kr.feedback}”</div> : null}
           </div>

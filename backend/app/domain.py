@@ -219,6 +219,25 @@ def compute_hpp(lines, versi=None):
     return round(sum(bom_line_cost(l) for l in ls), 2)
 
 
+def porsi_rows(recipe, concept, hpp_base):
+    """Per-portion HPP: BOM is entered for the base portion (multiplier 1); other portions scale it."""
+    recipe, concept = recipe or {}, concept or {}
+    rows = recipe.get("porsi") or []
+    if not rows:
+        rows = [{"nama": "Standar", "multiplier": 1, "hargaJual": recipe.get("hargaJual") or concept.get("hargaTarget")}]
+    out = []
+    for r in rows:
+        try:
+            mult = num(r.get("multiplier"), 1) or 1
+            harga = num(r.get("hargaJual"))
+        except ValueError:
+            mult, harga = 1, None
+        hpp = round((hpp_base or 0) * mult, 2)
+        out.append({"nama": r.get("nama") or "Standar", "multiplier": mult, "hargaJual": harga, "hpp": hpp,
+                    "foodCostPct": round(hpp / harga * 100, 1) if harga and hpp else None})
+    return out
+
+
 def compute_project_flags(p, settings, last_activity_at=None, t=None):
     t = t or today()
     sla = settings["slaDays"][p["category"]]

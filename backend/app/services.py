@@ -214,8 +214,10 @@ def funnel(projects, kandidat, year=None):
     return rows
 
 
-def sla_compliance(projects, settings):
+def sla_compliance(projects, settings, category=None):
     rows = []
+    if category:
+        projects = [p for p in projects if p["category"] == category]
     for st in D.STAGES:
         n = st["n"]
         actual, slas = [], []
@@ -287,6 +289,7 @@ def build_state(member):
         "summary": summary(projects, slots, settings),
         "funnel": funnel(projects, kandidat),
         "slaCompliance": sla_compliance(projects, settings),
+        "slaComplianceByCat": {c: sla_compliance(projects, settings, c) for c in D.CATEGORY_ORDER},
         "kandidat": [{k: x.get(k) for k in ("id", "projectId", "nama", "status", "screeningTotal")} for x in kandidat],
         "serverToday": D.fdate(D.today()),
     }

@@ -2,6 +2,7 @@ import React, { useEffect, useState, createContext, useContext } from 'react'
 
 export const BULAN = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des']
 export const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII']
+export const STAGE_NAMES = ['Pencarian Ide', 'Penyaringan Ide', 'Pembuatan Konsep', 'Pengujian Konsep', 'Pembuatan Prototipe', 'Pengujian Prototipe', 'Komersialisasi']
 
 export const fmtTgl = (s, short = false) => {
   if (!s) return '-'
@@ -75,7 +76,7 @@ export function Stepper({ stages, current, flags, status, size = 'sm', onTap, ac
             {i > 0 && <div className={`h-[2px] flex-1 ${s.state === 'skipped' ? 'bg-line' : s.state === 'done' || status === 'done' ? 'bg-hijau' : 'bg-line'}`} />}
             <button type="button" onClick={onTap ? () => onTap(n) : undefined}
               className={`flex ${dim} shrink-0 items-center justify-center rounded-full border-2 font-extrabold ${cls} ${active === n ? 'outline outline-2 outline-offset-2 outline-bata' : ''} ${onTap ? '' : 'pointer-events-none'}`}
-              title={s.nama}>{ROMAN[i]}</button>
+              title={STAGE_NAMES[i]} aria-label={`Stage ${ROMAN[i]} ${STAGE_NAMES[i]}`}>{ROMAN[i]}</button>
           </React.Fragment>
         )
       })}
