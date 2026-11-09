@@ -17,6 +17,7 @@ from .auth import (hash_pin, verify_pin, new_session, current_member, is_head, i
 from .db import get_db, clean, clean_all, ping
 from .seed import seed_whiteboard
 from .survey import router as survey_router, _survey_info
+from . import wa as WA
 
 from contextlib import asynccontextmanager
 
@@ -463,6 +464,10 @@ def set_status(pid: str, body: dict = Body(...), me=Depends(current_member)):
         raise HTTPException(400, "Proyek sudah selesai/dropped")
     _save_project(p, {"status": status, "statusNote": note})
     S.log_activity(pid, me, "status_change", frm=p["status"], to=status, note=note)
+    if status == "blocked" and p["status"] != "blocked":
+        WA.send_async(WA.phones(["pid_head"]),
+                      f"*Proyek BLOCKED* (PID)\n{p['nama']} · {p['kode']}\nStage {D.STAGES[p['currentStage'] - 1]['roman']} "
+                      f"{D.STAGES[p['currentStage'] - 1]['nama']}\nPenyebab: {note}\nOleh {me['name']}\n\n{WA.link(pid)}", "blocked")
     return _project_detail(pid)
 
 
@@ -496,6 +501,10 @@ def request_decision(pid: str, body: dict = Body(default={}), me=Depends(current
     J.send_email(heads, f"Keputusan dibutuhkan: {p['nama']}",
                  f"{me['name']} meminta keputusan Go / Revisi / Drop untuk {p['nama']} ({p['kode']}) di stage "
                  f"{D.STAGES[cur - 1]['roman']} {D.STAGES[cur - 1]['nama']}.\n{body.get('note') or ''}")
+    WA.send_async(WA.phones(["pid_head"]),
+                  f"*Keputusan dibutuhkan* (PID)\n{p['nama']} · {p['kode']}\nStage {D.STAGES[cur - 1]['roman']} {D.STAGES[cur - 1]['nama']}\n"
+                  f"Diminta oleh {me['name']}" + (f"\nCatatan: {body.get('note')}" if body.get('note') else "") +
+                  f"\n\nGo / Revisi / Drop: {WA.link(pid)}", "decisionRequest")
     return _project_detail(pid)
 
 
@@ -529,6 +538,12 @@ def decide(pid: str, body: dict = Body(...), me=Depends(current_member)):
             _set_kandidat_status(k, "drop")
     _save_project(p, upd)
     S.log_activity(pid, me, "decision", to=dec, note=body.get("note"))
+    label = {"go": "GO", "revisi": "REVISI", "drop": "DROP"}[dec]
+    WA.send_async(WA.phones(ids=[p.get("picId")]),
+                  f"*Keputusan {label}* (PID)\n{p['nama']} · {p['kode']}\nStage {D.STAGES[cur - 1]['roman']} {D.STAGES[cur - 1]['nama']}\n"
+                  f"Oleh {me['name']}" + (f"\nCatatan: {body.get('note')}" if body.get('note') else "") +
+                  ("\n\nSilakan lanjut ke stage berikutnya." if dec == "go" else "\n\nSlot launch proyek ini dikosongkan." if dec == "drop" else "\n\nPerbaiki lalu minta keputusan ulang.") +
+                  f"\n{WA.link(pid)}", "decisionResult")
     return _project_detail(pid)
 
 
@@ -982,6 +997,13 @@ def update_settings(body: dict = Body(...), me=Depends(current_member)):
     allowed = {"appName", "slaDays", "cadence", "launchTargetPerYear", "screeningCriteria", "screeningPassScore",
                "targetFoodCostPct", "slotStart", "digestTime", "nudgeTime", "weeklyDay", "weeklyTime", "workDays", "adminEmail", "stalledDays"}
     upd = {k: v for k, v in body.items() if k in allowed}
+    for k in ("waEnabled", "waGroup", "waEvents"):
+        if k in body:
+            upd[k] = body[k]
+    if body.get("waToken"):
+        upd["waToken"] = str(body["waToken"]).strip()
+    if body.get("waTokenClear"):
+        upd["waToken"] = ""
     if "slaDays" in upd:
         for cat, arr in upd["slaDays"].items():
             if cat not in D.CATEGORIES or len(arr) != 7 or any(int(x) < 1 for x in arr):
@@ -1093,6 +1115,27 @@ def export(name: str, me=Depends(current_member)):
         raise HTTPException(404, "Export tidak dikenal")
     return Response("﻿" + out, media_type="text/csv; charset=utf-8",
                     headers={"Content-Disposition": f'attachment; filename="pid-{name}-{D.fdate(D.today())}.csv"'})
+
+
+# ======================= WhatsApp =======================
+@app.get("/api/wa")
+def wa_status(me=Depends(current_member)):
+    require(is_head(me), "Hanya PID Head / Admin")
+    ws = WA.wa_settings()
+    return {"enabled": ws["enabled"], "hasToken": bool(ws["token"]), "group": ws["group"], "events": ws["events"],
+            "eventLabels": WA.EVENTS, "log": WA.recent_log()}
+
+
+@app.post("/api/wa/test")
+def wa_test(body: dict = Body(default={}), me=Depends(current_member)):
+    require(is_head(me), "Hanya PID Head / Admin")
+    target = body.get("target") or me.get("phone")
+    if not target:
+        raise HTTPException(400, "Isi nomor WhatsApp di profil Anda atau masukkan nomor tujuan")
+    res = WA.send([target], f"Tes notifikasi WhatsApp CRK PID Dashboard berhasil. ({D.fmt_tgl(D.today())})", "test", force=True)
+    if not res["ok"]:
+        raise HTTPException(400, f"WhatsApp gagal terkirim: {res['reason']}")
+    return res
 
 
 # ======================= static frontend =======================

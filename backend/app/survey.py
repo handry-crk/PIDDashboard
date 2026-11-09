@@ -10,6 +10,7 @@ from fastapi.responses import Response
 from . import domain as D, services as S
 from .auth import current_member, is_editor, is_head, require
 from .db import get_db, clean, clean_all
+from . import wa as WA
 
 router = APIRouter()
 INTENTS = ("pasti", "mungkin", "tidak")
@@ -252,4 +253,10 @@ def submit_survey(token: str, body: dict = Body(...)):
     db.responses.insert_one({"id": D.new_id(), "surveyId": sv["id"], "projectId": p["id"], "at": D.now_utc_iso(),
                              "nama": str(body.get("nama") or "")[:60], "clientId": client or None, "answers": answers})
     recompute(p["id"])
+    count = db.responses.count_documents({"surveyId": sv["id"]})
+    target = _target(p["stages"][5].get("details") or {})
+    if count == target:
+        WA.send_async(WA.phones(ids=[p.get("picId")]) + WA.phones(["pid_head"]),
+                      f"*Survey mencapai target* (PID)\n{p['nama']} · {p['kode']}\n{count} responden terkumpul. "
+                      f"Hasil sudah terisi di stage VI; silakan minta keputusan PID Head.\n\n{WA.link(p['id'])}", "surveyTarget")
     return {"ok": True, "message": "Terima kasih atas penilaian Anda!"}

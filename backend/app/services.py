@@ -25,6 +25,7 @@ def get_settings():
 def public_settings(s):
     s = dict(s)
     s.pop("adminPinHash", None)
+    s["waHasToken"] = bool(s.pop("waToken", None))
     return s
 
 

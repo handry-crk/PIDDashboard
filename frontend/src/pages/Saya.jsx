@@ -210,6 +210,7 @@ function Admin({ state, reload }) {
         </div>
       </Section>
 
+      <WhatsApp members={state.members} me={me} />
       {me.isAdmin && <AdminPin />}
 
       <Sheet open={!!pinFor} onClose={() => setPinFor(null)} title={`Reset PIN · ${pinFor?.name}`} footer={<button className="btn-p w-full" disabled={!/^\d{4,6}$/.test(pin)}
@@ -226,6 +227,73 @@ function Admin({ state, reload }) {
         </>}
       </Sheet>
     </>
+  )
+}
+
+function WhatsApp({ members, me }) {
+  const toast = useToast()
+  const [w, setW] = useState(null)
+  const [token, setToken] = useState('')
+  const [group, setGroup] = useState('')
+  const [testTo, setTestTo] = useState('')
+  const [busy, setBusy] = useState(false)
+  const load = () => api('/api/wa').then((r) => { setW(r); setGroup(r.group || '') }).catch(() => {})
+  useEffect(() => { load() }, [])
+  if (!w) return null
+  const save = async (patch, msg = 'Pengaturan WhatsApp tersimpan') => {
+    try { await api('/api/settings', { method: 'PUT', body: patch }); toast(msg); setToken(''); load() } catch (e) { toast(e.message, 'err') }
+  }
+  const test = async () => {
+    setBusy(true)
+    try { await api('/api/wa/test', { method: 'POST', body: testTo ? { target: testTo } : {} }); toast('Pesan tes terkirim'); load() }
+    catch (e) { toast(e.message, 'err'); load() } finally { setBusy(false) }
+  }
+  const noPhone = members.filter((m) => m.active && m.role !== 'viewer' && !m.phone)
+  return (
+    <Section title="Notifikasi WhatsApp" sub="Via Fonnte · token dari menu Device di fonnte.com">
+      <div className="card p-3">
+        <label className="mb-3 flex min-h-[44px] items-center justify-between gap-3 rounded-lg border border-line px-3">
+          <span className="text-sm font-semibold">Aktifkan notifikasi WhatsApp</span>
+          <input type="checkbox" className="h-6 w-6 accent-bata" checked={!!w.enabled} disabled={!w.hasToken}
+            onChange={(e) => save({ waEnabled: e.target.checked }, e.target.checked ? 'WhatsApp aktif' : 'WhatsApp dimatikan')} />
+        </label>
+        {!w.hasToken && <div className="mb-3 rounded-lg bg-[#F5E6CC] p-2 text-xs">Isi token Fonnte terlebih dahulu.</div>}
+        <Field label="Token Fonnte" hint={w.hasToken ? 'Token tersimpan (tidak ditampilkan). Isi lagi hanya untuk mengganti.' : 'Salin dari fonnte.com → Device → token'}>
+          <div className="grid grid-cols-[1fr_auto] gap-2">
+            <input className="inp" type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} placeholder={w.hasToken ? '••••••••' : 'Token device'} />
+            <button className="btn-p px-3" disabled={!token.trim()} onClick={() => save({ waToken: token.trim() }, 'Token tersimpan')}>Simpan</button>
+          </div>
+        </Field>
+        <Field label="ID grup WhatsApp untuk Weekly Update" hint="Format 1203xxxxxxxx@g.us (lihat daftar grup di dashboard Fonnte). Kosongkan bila tidak dipakai.">
+          <div className="grid grid-cols-[1fr_auto] gap-2">
+            <input className="inp" value={group} onChange={(e) => setGroup(e.target.value.trim())} placeholder="120363xxxxxxxx@g.us" />
+            <button className="btn-o px-3" onClick={() => save({ waGroup: group })}>Simpan</button>
+          </div>
+        </Field>
+        <div className="lbl">Kirim notifikasi untuk</div>
+        {Object.entries(w.eventLabels).map(([k, lab]) => (
+          <label key={k} className="mb-1 flex min-h-[40px] items-center justify-between gap-3 border-b border-line text-[13px]">
+            <span>{lab}</span>
+            <input type="checkbox" className="h-5 w-5 accent-bata" checked={!!w.events[k]} onChange={(e) => save({ waEvents: { ...w.events, [k]: e.target.checked } })} />
+          </label>
+        ))}
+        {noPhone.length > 0 && <div className="mt-3 rounded-lg bg-[#F5E6CC] p-2 text-xs">Belum ada nomor WhatsApp: {noPhone.map((m) => m.name).join(', ')}. Minta mereka mengisi di halaman Saya → Profil.</div>}
+        <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
+          <input className="inp" inputMode="numeric" value={testTo} onChange={(e) => setTestTo(e.target.value)} placeholder={me.phone ? `Tes ke ${me.phone}` : 'Nomor tujuan tes (08…)'} />
+          <button className="btn-o px-3" disabled={!w.hasToken || busy} onClick={test}>{busy ? 'Mengirim…' : 'Kirim tes'}</button>
+        </div>
+        {w.log.length > 0 && <>
+          <div className="mb-1 mt-4 text-[12px] font-bold">Log pengiriman terakhir</div>
+          {w.log.slice(0, 8).map((l, i) => (
+            <div key={i} className="mb-1 flex items-start justify-between gap-2 border-b border-line py-1.5 text-[11.5px]">
+              <div className="min-w-0"><b>{w.eventLabels[l.event]?.split(' →')[0] || l.event}</b> · {fmtWhen(l.at)}
+                <div className="truncate text-char/60">{l.ok ? `ke ${l.targets.length} tujuan` : l.reason}</div></div>
+              <span className={`shrink-0 font-bold ${l.ok ? 'text-hijau' : 'text-amber'}`}>{l.ok ? 'Terkirim' : 'Gagal'}</span>
+            </div>
+          ))}
+        </>}
+      </div>
+    </Section>
   )
 }
 

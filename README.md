@@ -54,6 +54,27 @@ User pertama = Admin. Admin PIN fallback default `1234` (ubah di Panel Admin).
 - `GET /api/public-metrics?key=<METRICS_API_KEY>` — untuk Service Excellence Dashboard / Daily Tracker
 - `POST /api/jobs/{digest|nudge|weekly|backup}/run` — jalankan manual (PID Head/Admin)
 
+## Notifikasi WhatsApp (Fonnte)
+1. Daftar di fonnte.com, hubungkan nomor WhatsApp pengirim (scan QR di menu Device), salin **token** device.
+2. Panel Admin → **Notifikasi WhatsApp** → isi token → aktifkan → **Kirim tes**.
+3. Untuk Weekly Update ke grup: masukkan nomor pengirim ke grup WhatsApp tim, ambil ID grup (`1203…@g.us`) dari dashboard Fonnte, isi di kolom grup.
+4. Setiap member mengisi nomor WhatsApp di **Saya → Profil**.
+
+| Event | Penerima |
+|---|---|
+| Permintaan keputusan | PID Head |
+| Hasil keputusan Go / Revisi / Drop | PIC proyek |
+| Proyek Blocked | PID Head |
+| Survey mencapai target responden | PIC proyek + PID Head |
+| Pengingat harian 09:00 | PID Supervisor |
+| Daily digest 17:00 (default mati) | PID Head |
+| Weekly Update | Grup WhatsApp |
+
+Tiap event bisa dimatikan; semua pengiriman tercatat di log Panel Admin. Token tidak pernah dikirim ke browser.
+
+## Survey responden (stage VI)
+Di stage Pengujian Prototipe: **Buat & buka survey** → download QR → tempel di outlet. Responden mengisi tanpa login; hasil terisi otomatis dan survey tertutup saat target responden / tanggal selesai tercapai.
+
 ## Jadwal otomatis (WIB, cek tiap 15 menit, sekali per hari)
 Nudge supervisor 09:00 hari kerja · Daily digest 17:00 hari kerja · Weekly Update Senin 08:30 · Backup Minggu 02:00 (8 file terakhir di `/data/backups`).
 

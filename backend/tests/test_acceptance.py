@@ -397,3 +397,78 @@ def test_porsi_files_survey(c):
     # SLA compliance per category
     st = c.get("/api/state", headers=H(th)).json()
     assert set(st["slaComplianceByCat"]) == {"varian_cimol", "minuman", "online_food", "new_brand"}
+
+
+def test_whatsapp_fonnte(c):
+    from app import wa as WA
+    os.environ["WA_SYNC"] = "1"
+    sent = []
+
+    class R:
+        def __init__(self, ok=True): self.status_code, self._ok = 200, ok
+        def json(self): return {"status": self._ok} if self._ok else {"status": False, "reason": "invalid token"}
+
+    def fake_post(url, headers, data):
+        sent.append({"url": url, "auth": headers["Authorization"], **data})
+        return R(ok=headers["Authorization"] != "salah")
+    WA._post = fake_post
+    th = c.post("/api/auth/admin-login", json={"pin": "1234"}).json()["token"]
+    st = c.get("/api/state", headers=H(th)).json()
+    head = next(m for m in st["members"] if m["role"] == "pid_head")
+    sup = next(m for m in st["members"] if m["role"] == "pid_supervisor")
+    c.put(f"/api/members/{head['id']}", headers=H(th), json={"phone": "081111111111"})
+    c.put(f"/api/members/{sup['id']}", headers=H(th), json={"phone": "082222222222"})
+
+    # disabled by default: nothing sent
+    p = c.post("/api/projects", headers=H(th), json={"nama": "Minuman Jun", "category": "minuman", "targetLaunch": "2027-06-01",
+                                                     "picId": sup["id"]}).json()["project"]
+    c.post(f"/api/projects/{p['id']}/status", headers=H(th), json={"status": "blocked", "note": "Tes"})
+    assert sent == []
+
+    # enable with token + group, token never returned to clients
+    c.put("/api/settings", headers=H(th), json={"waEnabled": True, "waToken": "TOKEN123", "waGroup": "120363000000@g.us"})
+    st = c.get("/api/state", headers=H(th)).json()
+    assert "TOKEN123" not in str(st) and st["settings"]["waHasToken"] is True
+    assert "TOKEN123" not in str(c.get("/api/wa", headers=H(th)).json())
+
+    # test message
+    r = c.post("/api/wa/test", headers=H(th), json={})
+    assert r.status_code == 200 and sent[-1]["target"] == "6281111111111" and sent[-1]["auth"] == "TOKEN123"
+    assert sent[-1]["url"] == "https://api.fonnte.com/send"
+
+    # blocked -> PID Head
+    c.post(f"/api/projects/{p['id']}/status", headers=H(th), json={"status": "on_track"})
+    c.post(f"/api/projects/{p['id']}/status", headers=H(th), json={"status": "blocked", "note": "Sampel gula aren telat"})
+    assert "BLOCKED" in sent[-1]["message"] and "Sampel gula aren telat" in sent[-1]["message"] and sent[-1]["target"] == "6281111111111"
+
+    # decision request -> head; decision result -> PIC (supervisor)
+    pid = p["id"]
+    c.post("/api/kandidat", headers=H(th), json={"projectId": pid, "nama": "Es Teh Leci"})
+    c.post(f"/api/projects/{pid}/stage", headers=H(th), json={"to": 2})
+    c.post(f"/api/projects/{pid}/skip", headers=H(th), json={"reason": "x"})
+    c.post(f"/api/projects/{pid}/skip", headers=H(th), json={"reason": "y"})
+    assert c.get(f"/api/projects/{pid}", headers=H(th)).json()["project"]["currentStage"] == 4
+    c.post(f"/api/projects/{pid}/request-decision", headers=H(th), json={"note": "Mohon review"})
+    assert "Keputusan dibutuhkan" in sent[-1]["message"] and sent[-1]["target"] == "6281111111111" and "/#/proyek/" in sent[-1]["message"]
+    c.post(f"/api/projects/{pid}/decision", headers=H(th), json={"decision": "revisi", "note": "Kurangi manis"})
+    assert "Keputusan REVISI" in sent[-1]["message"] and sent[-1]["target"] == "6282222222222"
+
+    # event switched off -> not sent, but logged
+    n = len(sent)
+    ev = c.get("/api/wa", headers=H(th)).json()["events"]
+    c.put("/api/settings", headers=H(th), json={"waEvents": {**ev, "decisionRequest": False}})
+    c.post(f"/api/projects/{pid}/request-decision", headers=H(th), json={})
+    assert len(sent) == n
+    log = c.get("/api/wa", headers=H(th)).json()["log"]
+    assert log[0]["ok"] is False and "dimatikan" in log[0]["reason"]
+
+    # weekly -> group
+    r = c.post("/api/jobs/weekly/run", headers=H(th)).json()
+    assert r["email"]["wa"]["ok"] and sent[-1]["target"] == "120363000000@g.us" and sent[-1]["message"].startswith("WEEKLY UPDATE PID CRK")
+
+    # Fonnte rejects token -> clear error
+    c.put("/api/settings", headers=H(th), json={"waToken": "salah"})
+    r = c.post("/api/wa/test", headers=H(th), json={})
+    assert r.status_code == 400 and "invalid token" in r.json()["detail"]
+    c.put("/api/settings", headers=H(th), json={"waEnabled": False})
+    os.environ.pop("WA_SYNC")

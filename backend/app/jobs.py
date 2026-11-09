@@ -9,6 +9,7 @@ from email.mime.multipart import MIMEMultipart
 from . import config, domain as D, services as S
 from .config import log
 from .db import get_db, clean_all
+from . import wa as WA
 
 
 # ---------- email ----------
@@ -98,6 +99,7 @@ def job_digest(force=False):
               for p in probs] or ["• Tidak ada"]
     to = [m["email"] for m in _members(["pid_head", "pid_supervisor", "admin"])] + [settings.get("adminEmail")]
     res = send_email(to, "Daily digest PID", "\n".join(lines))
+    res["wa"] = WA.send(WA.phones(["pid_head"]), "*" + lines[0] + "*\n" + "\n".join(lines[1:]) + f"\n\n{WA.link()}", "digest")
     _log_reminder("digest", res.get("to", []), res)
     return {"ok": True, "text": "\n".join(lines), "email": res}
 
@@ -124,6 +126,8 @@ def job_nudge(force=False):
     text = "Pengingat PID hari ini:\n" + ("\n".join(items) if items else "Tidak ada stage yang jatuh tempo.")
     to = [m["email"] for m in _members(["pid_supervisor"])]
     res = send_email(to, f"Pengingat PID: {len(items)} item", text) if items else {"sent": False, "reason": "tidak ada item"}
+    if items:
+        res["wa"] = WA.send(WA.phones(["pid_supervisor"]), "*Pengingat PID hari ini*\n" + "\n".join(items) + f"\n\n{WA.link()}", "nudge")
     _log_reminder("nudge", res.get("to", []), res)
     return {"ok": True, "text": text, "email": res}
 
@@ -138,6 +142,8 @@ def job_weekly(force=False):
     get_db().settings.update_one({"id": "settings"}, {"$set": {"lastWeeklyText": text, "lastWeeklyAt": D.now_utc_iso()}})
     to = [m["email"] for m in _members()] + [settings.get("adminEmail")]
     res = send_email(to, "Weekly Update PID CRK", text)
+    group = WA.wa_settings()["group"]
+    res["wa"] = WA.send([group], text + f"\n\nDetail: {settings_link(settings)}", "weekly") if group else {"ok": False, "reason": "Grup WhatsApp belum diisi"}
     _log_reminder("weekly", res.get("to", []), res)
     return {"ok": True, "text": text, "email": res}
 
@@ -146,7 +152,7 @@ def job_backup(force=False):
     db = get_db()
     os.makedirs(config.BACKUP_DIR, exist_ok=True)
     data = {c: clean_all(db[c].find({})) for c in
-            ["members", "projects", "kandidat", "bom", "vendors", "slots", "activity", "comments", "settings", "files", "surveys", "responses"]}
+            ["members", "projects", "kandidat", "bom", "vendors", "slots", "activity", "comments", "settings", "files", "surveys", "responses", "walog"]}
     name = f"pid-backup-{datetime.now(config.TZ).strftime('%Y%m%d-%H%M%S')}.json"
     path = os.path.join(config.BACKUP_DIR, name)
     with open(path, "w") as f:
@@ -156,6 +162,10 @@ def job_backup(force=False):
         os.remove(os.path.join(config.BACKUP_DIR, old))
     _log_reminder("backup", [], {"file": name})
     return {"ok": True, "file": name}
+
+
+def settings_link(settings):
+    return f"{config.PUBLIC_BASE_URL}/laporan?t={settings.get('shareToken')}"
 
 
 JOBS = {"digest": job_digest, "nudge": job_nudge, "weekly": job_weekly, "backup": job_backup}
