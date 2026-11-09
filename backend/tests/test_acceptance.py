@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 from app import domain as D, db as dbmod
 from app.main import app
 
-FIXED_TODAY = date(2026, 11, 9)
+FIXED_TODAY = date(2026, 11, 10)
 
 
 @pytest.fixture(scope="module")
@@ -186,7 +186,7 @@ def test_full_flow(c):
 
     # weekly
     r = c.post("/api/jobs/weekly/run", headers=H(th)).json()
-    assert r["text"].startswith("WEEKLY UPDATE PID CRK — 9 Nov 2026")
+    assert r["text"].startswith("WEEKLY UPDATE PID CRK — 10 Nov 2026")
     assert "BUTUH DUKUNGAN" in r["text"] and "Menunggu sampel isian" in r["text"]
     assert c.get(f"/api/report/weekly-text?t={token}").text == r["text"]
 
@@ -203,6 +203,55 @@ def test_full_flow(c):
     assert c.post("/api/jobs/backup/run", headers=H(th)).json()["ok"]
 
 
+def test_regressions(c):
+    th = c.post("/api/auth/admin-login", json={"pin": "1234"}).json()["token"]
+    # only the first user may self-register as PID Head
+    r = c.post("/api/auth/register", json={"name": "Orang Luar", "role": "pid_head", "pin": "1111"})
+    assert r.status_code == 403
+    st = c.get("/api/state", headers=H(th)).json()
+    vc = next(p for p in st["projects"] if p["kode"] == "VC-2702-01")
+    # planned override (whiteboard 9-23 Nov) is the deadline, not start+SLA
+    assert vc["flags"]["deadline"] == "2026-11-23" and vc["flags"]["slaSisa"] == 13
+    # Indonesian number formats
+    k = c.post("/api/kandidat", headers=H(th), json={"projectId": vc["id"], "nama": "Keju Lumer"}).json()
+    r = c.post(f"/api/kandidat/{k['id']}/bom", headers=H(th), json={"bahan": "Keju", "qty": "4,5", "unit": "g", "hargaPerUnit": "120.000"})
+    assert r.status_code == 200 and r.json()["qty"] == 4.5 and r.json()["hargaPerUnit"] == 120000 and r.json()["biayaPerPorsi"] == 540
+    assert c.post(f"/api/kandidat/{k['id']}/bom", headers=H(th), json={"bahan": "X", "qty": "abc"}).status_code == 400
+    # re-scoring keeps lolos/gugur in sync until set manually
+    low = {"market": 2, "harga": 2, "ops": 2, "bahan": 2, "diferensiasi": 2}
+    c.put(f"/api/kandidat/{k['id']}/scores", headers=H(th), json={"scores": low})
+    c.put(f"/api/kandidat/{k['id']}/scores", headers=H(th), json={"scores": {x: 5 for x in low}})
+    d = c.get(f"/api/projects/{vc['id']}", headers=H(th)).json()
+    assert next(x for x in d["kandidat"] if x["id"] == k["id"])["status"] == "lolos_screening"
+    c.put(f"/api/kandidat/{k['id']}", headers=H(th), json={"status": "gugur"})
+    c.put(f"/api/kandidat/{k['id']}/scores", headers=H(th), json={"scores": {x: 4 for x in low}})
+    d = c.get(f"/api/projects/{vc['id']}", headers=H(th)).json()
+    assert next(x for x in d["kandidat"] if x["id"] == k["id"])["status"] == "gugur"
+    # leaving II: only undecided kandidat must be scored (Salted Egg etc. still unscored -> blocked)
+    r = c.post(f"/api/projects/{vc['id']}/stage", headers=H(th), json={"to": 4})
+    assert r.status_code == 400 and "Salted Egg" in r.json()["detail"]
+    # code numbering survives deletes
+    a = c.post("/api/projects", headers=H(th), json={"nama": "NB A", "category": "new_brand", "targetLaunch": "2027-10-01"}).json()["project"]
+    b = c.post("/api/projects", headers=H(th), json={"nama": "NB B", "category": "new_brand", "targetLaunch": "2027-10-01"}).json()["project"]
+    c.delete(f"/api/projects/{a['id']}", headers=H(th))
+    r = c.post("/api/projects", headers=H(th), json={"nama": "NB C", "category": "new_brand", "targetLaunch": "2027-10-01"})
+    assert r.status_code == 200 and r.json()["project"]["kode"] == "NB-2710-03"
+    # skipping II promotes undecided ideas so the project is not stuck at the prototype gate
+    p = c.post("/api/projects", headers=H(th), json={"nama": "OF Mar", "category": "online_food", "targetLaunch": "2027-03-05"}).json()["project"]
+    c.post("/api/kandidat", headers=H(th), json={"projectId": p["id"], "nama": "Rice bowl"})
+    c.post(f"/api/projects/{p['id']}/stage", headers=H(th), json={"to": 2})
+    r = c.post(f"/api/projects/{p['id']}/skip", headers=H(th), json={"reason": "Data GoFood sudah jelas"})
+    assert r.json()["kandidat"][0]["status"] == "konsep"
+    # decision only on a running stage; stage VI target defaults to 30
+    assert c.post(f"/api/projects/{p['id']}/decision", headers=H(th), json={"decision": "go"}).status_code == 400
+    # last admin cannot be deactivated
+    me = c.get("/api/state", headers=H(th)).json()["me"]
+    assert c.put(f"/api/members/{me['id']}", headers=H(th), json={"active": False}).status_code == 400
+    # stage VII food cost with formatted numbers
+    r = c.put(f"/api/projects/{p['id']}/stages/7", headers=H(th), json={"details": {"hargaFinal": "25.000", "hppFinal": "8.750"}})
+    assert r.json()["project"]["stages"][6]["details"]["foodCostPct"] == 35.0
+
+
 def test_pin_lock(c):
     ms = c.get("/api/auth/members").json()
     ari = next(m for m in ms if m["name"] == "Ari")
@@ -213,3 +262,53 @@ def test_pin_lock(c):
     th = c.post("/api/auth/admin-login", json={"pin": "1234"}).json()["token"]
     assert c.post(f"/api/members/{ari['id']}/reset-pin", headers=H(th), json={"pin": "2222"}).status_code == 200
     assert c.post("/api/auth/login", json={"memberId": ari["id"], "pin": "2222"}).status_code == 200
+
+
+def test_full_lifecycle_to_launch(c):
+    th = c.post("/api/auth/admin-login", json={"pin": "1234"}).json()["token"]
+    st = c.get("/api/state", headers=H(th)).json()
+    slot = next(s for s in st["slots"] if s["category"] == "online_food" and s["period"] == "2027-02")
+    p = c.post("/api/projects", headers=H(th), json={"nama": "OF Feb 2027", "category": "online_food", "slotId": slot["id"]}).json()["project"]
+    pid = p["id"]
+    k = c.post("/api/kandidat", headers=H(th), json={"projectId": pid, "nama": "Chicken Katsu Cimol"}).json()
+    k2 = c.post("/api/kandidat", headers=H(th), json={"projectId": pid, "nama": "Beef Bulgogi Cimol"}).json()
+    v = c.post("/api/vendors", headers=H(th), json={"nama": "Vendor Katsu", "statusVendor": "approved"}).json()
+    ok = lambda r: (r.status_code == 200) or print(r.text)
+    assert ok(c.post(f"/api/projects/{pid}/stage", headers=H(th), json={"to": 2}))
+    for kid in (k["id"], k2["id"]):
+        c.put(f"/api/kandidat/{kid}/scores", headers=H(th), json={"scores": {x: 4 for x in ("market", "harga", "ops", "bahan", "diferensiasi")}})
+    for to in (3, 4):
+        assert ok(c.post(f"/api/projects/{pid}/stage", headers=H(th), json={"to": to}))
+    c.post(f"/api/projects/{pid}/request-decision", headers=H(th), json={})
+    assert ok(c.post(f"/api/projects/{pid}/decision", headers=H(th), json={"decision": "go", "kandidat": {k2["id"]: "drop"}}))
+    assert ok(c.post(f"/api/projects/{pid}/stage", headers=H(th), json={"to": 5}))
+    assert ok(c.post(f"/api/kandidat/{k['id']}/bom", headers=H(th), json={"bahan": "Ayam katsu", "qty": 80, "hargaPerUnit": 65000, "vendorId": v["id"]}))
+    c.put(f"/api/kandidat/{k['id']}", headers=H(th), json={"photos": ["/api/files/x"], "recipe": {"hargaJual": 25000}})
+    assert ok(c.post(f"/api/projects/{pid}/stage", headers=H(th), json={"to": 6}))  # dropped kandidat not required
+    r = c.post(f"/api/projects/{pid}/stage", headers=H(th), json={"to": 7})
+    assert r.status_code == 400 and "keputusan" in r.json()["detail"].lower()
+    c.post(f"/api/projects/{pid}/decision", headers=H(th), json={"decision": "go"})
+    r = c.post(f"/api/projects/{pid}/stage", headers=H(th), json={"to": 7})
+    assert r.status_code == 400 and "Responden baru 0 dari target 30" in r.json()["detail"]
+    c.put(f"/api/projects/{pid}/stages/6", headers=H(th), json={"details": {"respondenActual": 31}})
+    assert ok(c.post(f"/api/projects/{pid}/stage", headers=H(th), json={"to": 7}))
+    c.put(f"/api/projects/{pid}/stages/7", headers=H(th), json={"details": {"launchDate": "2027-02-03", "hargaFinal": 25000, "hppFinal": 7800}})
+    c.post(f"/api/projects/{pid}/decision", headers=H(th), json={"decision": "go"})
+    r = c.post(f"/api/projects/{pid}/stage", headers=H(th), json={"to": 8})
+    assert r.status_code == 400 and "hand-off" in r.json()["detail"]
+    items = [dict(h, done=True) if h["key"] != "frozen" else dict(h, na=True) for h in r.json().get("project", {}).get("handoff", []) or
+             c.get(f"/api/projects/{pid}", headers=H(th)).json()["project"]["handoff"]]
+    c.put(f"/api/projects/{pid}/handoff", headers=H(th), json={"items": items})
+    r = c.post(f"/api/projects/{pid}/stage", headers=H(th), json={"to": 8})
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["project"]["status"] == "done" and d["project"]["launchedAt"] == "2027-02-03"
+    ks = {x["nama"]: x["status"] for x in d["kandidat"]}
+    assert ks == {"Chicken Katsu Cimol": "launch", "Beef Bulgogi Cimol": "drop"}
+    st = c.get("/api/state", headers=H(th)).json()
+    s2 = next(s for s in st["slots"] if s["id"] == slot["id"])
+    assert s2["flags"]["launched"] is True
+    assert st["funnel"][-1]["count"] >= 1
+    rep = c.get(f"/api/report?t={st['settings']['shareToken']}").json()
+    assert any(x["id"] == pid for x in rep["launched"])
+    assert next(x for x in rep["projects"] if x["id"] == pid)["foodCost"] == "sesuai target"

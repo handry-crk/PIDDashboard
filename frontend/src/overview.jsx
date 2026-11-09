@@ -155,7 +155,7 @@ export function PipelineByCategory({ projects, stages, categories, order, onOpen
 export function Funnel({ rows }) {
   const max = Math.max(1, ...rows.map((r) => r.count))
   return (
-    <Section title="Funnel Inovasi" sub="Kandidat ide sampai launch, tahun berjalan">
+    <Section title="Funnel Inovasi" sub="Kandidat ide sampai launch, 12 bulan terakhir">
       <div className="card p-3">
         {rows.map((r, i) => (
           <div key={r.label} className="mb-2 last:mb-0">

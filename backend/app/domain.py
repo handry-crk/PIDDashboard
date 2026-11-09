@@ -106,6 +106,29 @@ def fdate(d):
     return d.isoformat() if d else None
 
 
+def num(v, default=None):
+    """Parse numbers typed Indonesian-style: '120.000' -> 120000, '4,5' -> 4.5."""
+    if v is None or v == "":
+        return default
+    if isinstance(v, (int, float)):
+        return v
+    t = str(v).strip().replace("Rp", "").replace(" ", "")
+    if "," in t:
+        t = t.replace(".", "").replace(",", ".")
+    elif t.count(".") >= 1 and len(t.split(".")[-1]) == 3:
+        t = t.replace(".", "")
+    try:
+        f = float(t)
+    except ValueError:
+        raise ValueError(f"Angka tidak valid: {v}")
+    return int(f) if f.is_integer() else f
+
+
+def versi_key(v):
+    m = [int(x) for x in __import__("re").findall(r"\d+", v or "")]
+    return (m or [0], v or "")
+
+
 def new_id():
     return uuid.uuid4().hex[:12]
 
@@ -213,14 +236,20 @@ def compute_project_flags(p, settings, last_activity_at=None, t=None):
     if st["state"] == "in_progress" and st.get("actualStart"):
         d = (t - pdate(st["actualStart"])).days
         out["daysInStage"] = d
-        out["slaSisa"] = sla[cur - 1] - d
-        out["lewatSla"] = d > sla[cur - 1]
+        # deadline: a manually agreed planned end (e.g. whiteboard dates) wins; otherwise start + SLA days
+        if st.get("plannedOverride") and st.get("plannedEnd"):
+            deadline = pdate(st["plannedEnd"])
+        else:
+            deadline = pdate(st["actualStart"]) + timedelta(days=sla[cur - 1])
+        out["deadline"] = fdate(deadline)
+        out["slaSisa"] = (deadline - t).days
+        out["lewatSla"] = t > deadline
     remaining = 0
     for s in p["stages"]:
         if s["stage"] < cur or s["state"] in ("done", "skipped"):
             continue
-        if s["stage"] == cur and out["daysInStage"] is not None:
-            remaining += max(0, sla[cur - 1] - out["daysInStage"])
+        if s["stage"] == cur and out["slaSisa"] is not None:
+            remaining += max(0, out["slaSisa"])
         else:
             remaining += sla[s["stage"] - 1]
     out["remainingSlaDays"] = remaining

@@ -42,7 +42,14 @@ def log_activity(project_id, by, action, frm=None, to=None, note=None, kandidat_
 
 
 # ---------- slots ----------
-def ensure_slots(settings=None):
+_last_slot_sync = {"at": 0.0}
+
+
+def ensure_slots(settings=None, force=False):
+    import time
+    if not force and time.time() - _last_slot_sync["at"] < 60:
+        return
+    _last_slot_sync["at"] = time.time()
     db = get_db()
     settings = settings or get_settings()
     t = D.today()
@@ -183,7 +190,8 @@ def slots_enriched(projects, settings):
 def funnel(projects, kandidat, year=None):
     year = year or D.today().year
     pids = {p["id"] for p in projects}
-    ks = [k for k in kandidat if k["projectId"] in pids and (k.get("createdAt") or "")[:4] >= str(year - 1)]
+    since = D.fdate(D.today() - D.timedelta(days=365))
+    ks = [k for k in kandidat if k["projectId"] in pids and (k.get("createdAt") or "")[:10] >= since]
     order = ["ide", "lolos_screening", "konsep", "prototipe", "lolos_uji", "launch"]
     rank = {s: i for i, s in enumerate(order)}
     rank.update({"gugur": 0, "drop": None})

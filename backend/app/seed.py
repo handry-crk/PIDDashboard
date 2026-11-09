@@ -31,7 +31,7 @@ def seed_whiteboard(member):
     db.settings.update_one({"id": "settings"}, {"$set": {"slotStart": start}})
     for cat, per in start.items():
         db.slots.delete_many({"category": cat, "period": {"$lt": per}, "auto": True, "projectId": None})
-    S.ensure_slots()
+    S.ensure_slots(force=True)
     sup = db.members.find_one({"role": "pid_supervisor", "active": True})
     pic = sup["id"] if sup else member["id"]
 

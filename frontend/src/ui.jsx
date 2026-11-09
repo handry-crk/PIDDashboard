@@ -66,13 +66,13 @@ export function Stepper({ stages, current, flags, status, size = 'sm', onTap, ac
         const isCur = n === current && !['done', 'dropped'].includes(status)
         const over = isCur && flags?.lewatSla
         let cls = 'border-line text-abu bg-transparent'
-        if (s.state === 'done' || status === 'done') cls = 'border-hijau bg-hijau text-white'
-        else if (s.state === 'skipped') cls = 'border-dashed border-abu text-abu bg-transparent'
+        if (s.state === 'skipped') cls = 'border-dashed border-abu text-abu bg-transparent'
+        else if (s.state === 'done' || status === 'done') cls = 'border-hijau bg-hijau text-white'
         else if (over) cls = 'border-bata bg-bata text-white'
         else if (isCur) cls = 'border-hijau text-hijau bg-white ring-2 ring-hijau/25'
         return (
           <React.Fragment key={n}>
-            {i > 0 && <div className={`h-[2px] flex-1 ${s.state === 'done' || status === 'done' ? 'bg-hijau' : 'bg-line'}`} />}
+            {i > 0 && <div className={`h-[2px] flex-1 ${s.state === 'skipped' ? 'bg-line' : s.state === 'done' || status === 'done' ? 'bg-hijau' : 'bg-line'}`} />}
             <button type="button" onClick={onTap ? () => onTap(n) : undefined}
               className={`flex ${dim} shrink-0 items-center justify-center rounded-full border-2 font-extrabold ${cls} ${active === n ? 'outline outline-2 outline-offset-2 outline-bata' : ''} ${onTap ? '' : 'pointer-events-none'}`}
               title={s.nama}>{ROMAN[i]}</button>

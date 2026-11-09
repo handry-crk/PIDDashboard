@@ -7,11 +7,33 @@ import {
 } from '../ui.jsx'
 
 /* ---------- small autosave inputs ---------- */
+// Indonesian number entry: "120.000" -> 120000, "4,5" -> 4.5
+export const parseNum = (t) => {
+  if (t === null || t === undefined || String(t).trim() === '') return null
+  let x = String(t).replace(/Rp|\s/g, '')
+  if (x.includes(',')) x = x.replace(/\./g, '').replace(',', '.')
+  else if (/\.\d{3}$/.test(x)) x = x.replace(/\./g, '')
+  const n = Number(x)
+  return isNaN(n) ? NaN : n
+}
+const showNum = (n) => (n === null || n === undefined || n === '') ? '' : String(n).replace('.', ',')
+
 function Auto({ value, onSave, type = 'text', placeholder, rows, disabled, inputMode, className = '' }) {
-  const [v, setV] = useState(value ?? '')
-  useEffect(() => { setV(value ?? '') }, [value])
-  const commit = () => { const nv = type === 'number' ? (v === '' ? null : Number(v)) : v; if ((nv ?? '') !== (value ?? '')) onSave(nv) }
-  const props = { className: `inp ${className}`, value: v, placeholder, disabled, onChange: (e) => setV(e.target.value), onBlur: commit }
+  const toText = (x) => type === 'number' ? showNum(x) : (x ?? '')
+  const [v, setV] = useState(toText(value))
+  const [bad, setBad] = useState(false)
+  useEffect(() => { setV(toText(value)); setBad(false) }, [value])
+  const commit = () => {
+    if (type === 'number') {
+      const nv = parseNum(v)
+      if (Number.isNaN(nv)) { setBad(true); return }
+      setBad(false)
+      if (nv !== (value === '' || value === undefined ? null : parseNum(value))) onSave(nv)
+      return
+    }
+    if ((v ?? '') !== (value ?? '')) onSave(v)
+  }
+  const props = { className: `inp ${className} ${bad ? 'border-bata ring-1 ring-bata' : ''}`, value: v, placeholder, disabled, onChange: (e) => setV(e.target.value), onBlur: commit }
   if (rows) return <textarea rows={rows} {...props} />
   return <input type={type === 'number' ? 'text' : type} inputMode={type === 'number' ? 'decimal' : inputMode} {...props}
     onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} />
@@ -365,8 +387,12 @@ function ProtoCard({ k, id, p, vendors, can, run, saveK, targetFc }) {
   const sv = (key) => (v) => saveK(k.id, { recipe: { [key]: v } })
   const [line, setLine] = useState({ bahan: '', qty: '', unit: 'g', hargaPerUnit: '', vendorId: '', inhouse: false, versi: r.versi || 'v1' })
   const [busy, setBusy] = useState(false)
-  const addLine = () => run(() => api(`/api/kandidat/${k.id}/bom`, { method: 'POST', body: { ...line, vendorId: line.vendorId || null } }), 'Bahan ditambahkan')
-    .then((ok) => ok && setLine({ ...line, bahan: '', qty: '', hargaPerUnit: '', vendorId: '', inhouse: false }))
+  const addLine = () => {
+    const qty = parseNum(line.qty), harga = parseNum(line.hargaPerUnit)
+    if (Number.isNaN(qty) || Number.isNaN(harga)) return run(() => Promise.reject(new Error('Qty / harga tidak valid. Contoh: 4,5 atau 120.000')))
+    return run(() => api(`/api/kandidat/${k.id}/bom`, { method: 'POST', body: { ...line, qty, hargaPerUnit: harga, vendorId: line.vendorId || null } }), 'Bahan ditambahkan')
+      .then((ok) => ok && setLine({ ...line, bahan: '', qty: '', hargaPerUnit: '', vendorId: '', inhouse: false }))
+  }
   const upload = async (e) => {
     const file = e.target.files[0]; if (!file) return
     setBusy(true)
@@ -452,7 +478,7 @@ function Stage6({ st, ks, can, saveDet, saveK }) {
           <Field label="Target responden"><Auto type="number" value={tgt} disabled={!can} onSave={saveDet(6, 'respondenTarget')} /></Field>
           <Field label="Actual responden"><Auto type="number" value={det.respondenActual} disabled={!can} onSave={saveDet(6, 'respondenActual')} /></Field>
         </div>
-        <div className="h-2.5 rounded-full bg-tint2"><div className="h-2.5 rounded-full bg-hijau" style={{ width: `${Math.min(100, ((det.respondenActual || 0) / (tgt || 1)) * 100)}%` }} /></div>
+        <div className="h-2.5 rounded-full bg-tint2"><div className="h-2.5 rounded-full bg-hijau" style={{ width: `${Math.min(100, ((Number(det.respondenActual) || 0) / (Number(tgt) || 1)) * 100)}%` }} /></div>
         <div className="mt-1 text-right text-[11px] text-char/60">{det.respondenActual || 0} dari {tgt} responden</div>
       </Box>
       {ks.map((k) => {

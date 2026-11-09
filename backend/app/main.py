@@ -26,7 +26,7 @@ logging.basicConfig(level=logging.INFO)
 async def lifespan(app):
     config.warn_defaults()
     S.get_settings()
-    S.ensure_slots()
+    S.ensure_slots(force=True)
     sch = J.start_scheduler() if config.ENABLE_SCHEDULER else None
     yield
     if sch:
@@ -100,7 +100,7 @@ def _gate(p, n):
         live = [k for k in ks if k["status"] not in ("drop",)]
         if not live:
             raise HTTPException(400, "Tambahkan kandidat ide sebelum menyelesaikan Penyaringan Ide")
-        unscored = [k["nama"] for k in live if S_total(k, settings) is None]
+        unscored = [k["nama"] for k in live if k["status"] in ("ide", "lolos_screening") and S_total(k, settings) is None]
         if unscored:
             raise HTTPException(400, f"Lengkapi scoring untuk: {', '.join(unscored)}")
         if not any(k["status"] in CONTINUING for k in live):
@@ -121,7 +121,8 @@ def _gate(p, n):
                 raise HTTPException(400, f"Upload minimal 1 foto prototipe {k['nama']} sebelum lanjut")
     if n == 6:
         d = st.get("details") or {}
-        tgt, act = int(d.get("respondenTarget") or 0), int(d.get("respondenActual") or 0)
+        tgt = int(D.num(d.get("respondenTarget"), 30) or 0)
+        act = int(D.num(d.get("respondenActual"), 0) or 0)
         if act < tgt and not st.get("decisionNote"):
             raise HTTPException(400, f"Responden baru {act} dari target {tgt}. Lengkapi responden atau minta PID Head memberi catatan")
     if n == 7:
@@ -154,11 +155,14 @@ def _project_detail(pid):
     for k in ks:
         k["bom"] = clean_all(db.bom.find({"kandidatId": k["id"]}))
         k["screeningTotal"] = S_total(k, settings)
-        versions = sorted({l.get("versi") or "v1" for l in k["bom"]}) or ["v1"]
+        versions = sorted({l.get("versi") or "v1" for l in k["bom"]}, key=D.versi_key) or ["v1"]
         k["hppByVersi"] = {v: D.compute_hpp(k["bom"], v) for v in versions}
         latest = versions[-1]
         k["hpp"] = k["hppByVersi"].get(latest, 0)
-        harga = (k.get("recipe") or {}).get("hargaJual") or (k.get("concept") or {}).get("hargaTarget")
+        try:
+            harga = D.num((k.get("recipe") or {}).get("hargaJual")) or D.num((k.get("concept") or {}).get("hargaTarget"))
+        except ValueError:
+            harga = None
         k["foodCostPct"] = round(k["hpp"] / float(harga) * 100, 1) if harga and k["hpp"] else None
         k["halalWarnings"] = []
         for l in k["bom"]:
@@ -222,6 +226,8 @@ def register(body: RegisterIn):
     if db.members.find_one({"name": {"$regex": f"^{re.escape(body.name.strip())}$", "$options": "i"}}):
         raise HTTPException(409, "Nama sudah terdaftar. Pilih nama Anda di halaman login")
     first = db.members.count_documents({}) == 0
+    if body.role == "pid_head" and not first:
+        raise HTTPException(403, "Role PID Head hanya bisa diberikan Admin. Daftar dengan role lain, lalu minta Admin mengubah role Anda")
     m = {"id": D.new_id(), "name": body.name.strip(), "role": body.role, "email": body.email.strip(), "phone": body.phone.strip(),
          "pinHash": hash_pin(body.pin), "active": True, "isAdmin": first, "failedPins": 0, "lockedUntil": None,
          "createdAt": D.now_utc_iso()}
@@ -304,7 +310,8 @@ def create_project(body: ProjectIn, me=Depends(current_member)):
         target = target or f"{slot['period']}-01"
     settings = S.get_settings()
     prefix = D.project_code_prefix(body.category, target)
-    n = db.projects.count_documents({"kode": {"$regex": f"^{prefix}-"}}) + 1
+    used = [int(x["kode"].rsplit("-", 1)[1]) for x in db.projects.find({"kode": {"$regex": f"^{prefix}-"}}, {"kode": 1})]
+    n = max(used, default=0) + 1
     kode = f"{prefix}-{n:02d}"
     stages = D.empty_stages()
     D.back_schedule(stages, target, settings["slaDays"][body.category])
@@ -431,6 +438,9 @@ def skip_stage(pid: str, body: dict = Body(...), me=Depends(current_member)):
     ns["state"], ns["actualStart"] = "in_progress", D.fdate(D.today())
     D.back_schedule(p["stages"], p.get("targetLaunch"), S.get_settings()["slaDays"][p["category"]])
     _save_project(p, {"stages": p["stages"], "currentStage": nxt})
+    if cur <= 2:
+        for k in clean_all(get_db().kandidat.find({"projectId": pid, "status": "ide"})):
+            _set_kandidat_status(k, "lolos_screening")
     _promote_kandidat(pid, nxt)
     S.log_activity(pid, me, "skip", frm=cur, to=nxt, note=reason)
     return _project_detail(pid)
@@ -498,6 +508,8 @@ def decide(pid: str, body: dict = Body(...), me=Depends(current_member)):
     if cur not in D.DECISION_STAGES:
         raise HTTPException(400, "Stage ini tidak membutuhkan keputusan")
     st = p["stages"][cur - 1]
+    if st["state"] != "in_progress" or p["status"] in ("done", "dropped"):
+        raise HTTPException(400, "Keputusan hanya bisa diberikan pada stage yang sedang berjalan")
     st.update({"decision": dec, "decisionNote": body.get("note") or "", "decidedBy": me["name"], "decidedAt": D.now_utc_iso(),
                "decisionRequested": False})
     for kid, kdec in (body.get("kandidat") or {}).items():
@@ -540,8 +552,12 @@ def update_stage(pid: str, n: int, body: dict = Body(...), me=Depends(current_me
     if "details" in body and isinstance(body["details"], dict):
         det = dict(st.get("details") or {})
         det.update(body["details"])
-        if n == 7 and det.get("hargaFinal") and det.get("hppFinal"):
-            det["foodCostPct"] = round(float(det["hppFinal"]) / float(det["hargaFinal"]) * 100, 1)
+        if n == 7:
+            try:
+                hf, hp = D.num(det.get("hargaFinal")), D.num(det.get("hppFinal"))
+            except ValueError as e:
+                raise HTTPException(400, str(e))
+            det["foodCostPct"] = round(hp / hf * 100, 1) if hf and hp else None
         st["details"] = det
     _save_project(p, {"stages": p["stages"]})
     S.log_activity(pid, me, "edit", to=n, note=f"Update data stage {D.STAGES[n - 1]['roman']}")
@@ -635,6 +651,8 @@ def update_kandidat(kid: str, body: dict = Body(...), me=Depends(current_member)
             upd[key] = merged
         else:
             upd[key] = v
+    if "status" in body:
+        upd["statusManual"] = True
     get_db().kandidat.update_one({"id": kid}, {"$set": upd})
     if "status" in body:
         _set_kandidat_status(k, body["status"])
@@ -657,7 +675,10 @@ def score_kandidat(kid: str, body: dict = Body(...), me=Depends(current_member))
     require(is_editor(me))
     k = _kandidat(kid)
     settings = S.get_settings()
-    scores = body.get("scores") or {}
+    try:
+        scores = {key: D.num(v) for key, v in (body.get("scores") or {}).items() if v not in (None, "")}
+    except ValueError as e:
+        raise HTTPException(400, str(e))
     for c in settings["screeningCriteria"]:
         v = scores.get(c["id"])
         if v is not None and not (1 <= float(v) <= 5):
@@ -666,14 +687,17 @@ def score_kandidat(kid: str, body: dict = Body(...), me=Depends(current_member))
     upd = {"screeningScores": scores, "screeningTotal": total}
     for f in ("estHargaJual", "estHpp"):
         if f in body:
-            upd[f] = body[f]
+            upd[f] = D.num(body[f])
     suggested = None
+    auto = k["status"] in ("ide", "lolos_screening", "gugur") and not k.get("statusManual")
     if total is not None:
         suggested = "lolos_screening" if total >= settings["screeningPassScore"] else "gugur"
-        if k["status"] == "ide":
-            upd["status"] = suggested
-            if suggested == "lolos_screening":
-                upd["maxStatus"] = "lolos_screening"
+    elif auto and k["status"] != "ide":
+        upd["status"] = "ide"
+    if suggested and auto:
+        upd["status"] = suggested
+        if suggested == "lolos_screening" and RANK.get(k.get("maxStatus", "ide"), 0) < 1:
+            upd["maxStatus"] = "lolos_screening"
     get_db().kandidat.update_one({"id": kid}, {"$set": upd})
     S.log_activity(k["projectId"], me, "score", note=f"Scoring {k['nama']}: {total}", kandidat_id=kid)
     return {"ok": True, "screeningTotal": total, "suggested": suggested}
@@ -695,9 +719,16 @@ def _validate_bom(k, body):
         raise HTTPException(400, "Isi nama bahan")
     if body.get("unit", "g") not in ("g", "ml", "pcs"):
         raise HTTPException(400, "Satuan harus g, ml, atau pcs")
+    try:
+        qty, harga = D.num(body.get("qty"), 0), D.num(body.get("hargaPerUnit"), 0)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    if qty <= 0:
+        raise HTTPException(400, "Isi qty bahan per porsi lebih dari 0")
+    if harga < 0:
+        raise HTTPException(400, "Harga bahan tidak boleh negatif")
     return {"bahan": body["bahan"].strip(), "vendorId": vid, "inhouse": bool(body.get("inhouse")),
-            "qty": float(body.get("qty") or 0), "unit": body.get("unit", "g"),
-            "hargaPerUnit": float(body.get("hargaPerUnit") or 0), "versi": body.get("versi") or "v1"}
+            "qty": qty, "unit": body.get("unit", "g"), "hargaPerUnit": harga, "versi": (body.get("versi") or "v1").strip()}
 
 
 @app.post("/api/kandidat/{kid}/bom")
@@ -930,7 +961,7 @@ def update_settings(body: dict = Body(...), me=Depends(current_member)):
         raise HTTPException(400, "Total bobot kriteria screening harus lebih dari 0")
     get_db().settings.update_one({"id": "settings"}, {"$set": upd})
     if "cadence" in upd:
-        S.ensure_slots()
+        S.ensure_slots(force=True)
     if "slaDays" in upd:
         settings = S.get_settings()
         for p in clean_all(get_db().projects.find({"status": {"$nin": ["done", "dropped"]}})):
@@ -964,6 +995,11 @@ def update_member(mid: str, body: dict = Body(...), me=Depends(current_member)):
     upd = {k: body[k] for k in ("role", "active", "isAdmin", "email", "phone", "name") if k in body}
     if "role" in upd and upd["role"] not in D.ROLES:
         raise HTTPException(400, "Role tidak valid")
+    if upd.get("active") is False or upd.get("isAdmin") is False:
+        target = get_db().members.find_one({"id": mid})
+        admins = get_db().members.count_documents({"isAdmin": True, "active": True})
+        if target and target.get("isAdmin") and admins <= 1:
+            raise HTTPException(400, "Tidak bisa menonaktifkan / mencabut Admin terakhir. Jadikan member lain Admin terlebih dahulu")
     get_db().members.update_one({"id": mid}, {"$set": upd})
     if upd.get("active") is False:
         get_db().sessions.delete_many({"memberId": mid})

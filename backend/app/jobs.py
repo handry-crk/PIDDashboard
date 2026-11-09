@@ -41,8 +41,12 @@ def send_email(to_list, subject, text):
             msg["Subject"], msg["From"], msg["To"] = subject, config.SMTP_FROM, ", ".join(to_list)
             msg.attach(MIMEText(text, "plain", "utf-8"))
             msg.attach(MIMEText(html_body, "html", "utf-8"))
-            with smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT, timeout=15) as s:
-                s.starttls()
+            if config.SMTP_PORT == 465:
+                conn = smtplib.SMTP_SSL(config.SMTP_HOST, config.SMTP_PORT, timeout=15)
+            else:
+                conn = smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT, timeout=15)
+                conn.starttls()
+            with conn as s:
                 if config.SMTP_USER:
                     s.login(config.SMTP_USER, config.SMTP_PASS)
                 s.sendmail(config.SMTP_FROM, to_list, msg.as_string())
@@ -79,7 +83,7 @@ def job_digest(force=False):
     db = get_db()
     today = D.fdate(D.today())
     moved = [a for a in clean_all(db.activity.find({"action": {"$in": ["stage_advance", "skip", "decision", "launch"]}}))
-             if a["at"][:10] == today]
+             if datetime.fromisoformat(a["at"]).astimezone(config.TZ).date().isoformat() == today]
     active = [p for p in projects if p.get("status") not in ("done", "dropped")]
     lines = [f"Daily digest PID — {D.fmt_tgl(D.today())}", ""]
     lines.append("PERGERAKAN HARI INI")

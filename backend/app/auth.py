@@ -33,7 +33,9 @@ def current_member(authorization: str = Header(default="")):
     if not token:
         raise HTTPException(401, "Silakan login terlebih dahulu")
     s = get_db().sessions.find_one({"token": token})
-    if not s:
+    if not s or datetime.fromisoformat(s["createdAt"]) < datetime.now(timezone.utc) - timedelta(days=30):
+        if s:
+            get_db().sessions.delete_one({"token": token})
         raise HTTPException(401, "Sesi berakhir, silakan login ulang")
     m = get_db().members.find_one({"id": s["memberId"]})
     if not m or not m.get("active", True):

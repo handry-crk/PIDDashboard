@@ -69,7 +69,7 @@ function Shell() {
   const ctx = { state, reload: load }
 
   let body
-  if (page === 'proyek' && id) body = <ProjectDetail id={id} {...ctx} />
+  if (page === 'proyek' && id) body = <ProjectDetail key={id} id={id} {...ctx} />
   else if (page === 'proyek') body = <Proyek {...ctx} />
   else if (page === 'keputusan') body = <Keputusan {...ctx} />
   else if (page === 'vendor') body = <Vendor {...ctx} />
