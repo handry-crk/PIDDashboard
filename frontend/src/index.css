@@ -16,3 +16,14 @@ input, select, textarea { font-size: 16px; }
   .btn-g { @apply btn text-char/80 hover:bg-tint2; }
   .card { @apply rounded-xl border border-line bg-card; }
 }
+
+@media print {
+  @page { size: A4 landscape; margin: 10mm; }
+  html, body { background: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .no-scrollbar { overflow: visible !important; }
+  .card { break-inside: avoid; }
+  .tl-present .card:first-of-type, .tl-present > .card { zoom: 0.74; }
+  .tl-present .mt-5 { break-before: page; }
+  .card.agenda-card { break-inside: auto; }
+  .agenda-row { break-inside: avoid; }
+}

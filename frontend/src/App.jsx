@@ -10,6 +10,7 @@ import Vendor from './pages/Vendor.jsx'
 import Saya from './pages/Saya.jsx'
 import Laporan from './pages/Laporan.jsx'
 import Survey from './pages/Survey.jsx'
+import Timeline from './pages/Timeline.jsx'
 
 function useHash() {
   const [h, setH] = useState(window.location.hash || '#/beranda')
@@ -25,6 +26,7 @@ export const go = (path) => { window.location.hash = path }
 const NAV = [
   { key: 'beranda', label: 'Beranda', icon: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z' },
   { key: 'proyek', label: 'Proyek', icon: 'M4 5h16M4 12h16M4 19h10' },
+  { key: 'timeline', label: 'Timeline', icon: 'M3 5h18M7 3v4M17 3v4M4 9h16v11H4zM8 13h5M8 17h8', desktopOnly: true },
   { key: 'keputusan', label: 'Keputusan', icon: 'M5 13l4 4L19 7' },
   { key: 'vendor', label: 'Vendor', icon: 'M3 7h18l-2 12H5zM8 7V5a4 4 0 0 1 8 0v2' },
   { key: 'saya', label: 'Saya', icon: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm-7 9a7 7 0 0 1 14 0' },
@@ -92,7 +94,9 @@ function Shell() {
   if (!authed) return <Login onLogin={() => { setAuthed(true); go('#/beranda') }} />
   if (!state) return <div className="flex min-h-screen items-center justify-center text-sm text-char/60">{err || 'Memuat dashboard…'}</div>
 
-  const [, page, id] = hash.replace('#', '').split('/')
+  const [hpath, hquery = ''] = hash.replace('#', '').split('?')
+  const [, page, id] = hpath.split('/')
+  const present = page === 'timeline' && hquery.includes('present=1')
   const waiting = state.projects.filter((p) => p.waitingDecision).length
   const isHead = state.me.role === 'pid_head' || state.me.isAdmin
   const ctx = { state, reload: load }
@@ -100,14 +104,16 @@ function Shell() {
   let body
   if (page === 'proyek' && id) body = <ProjectDetail key={id} id={id} {...ctx} />
   else if (page === 'proyek') body = <Proyek {...ctx} />
+  else if (page === 'timeline') body = <Timeline {...ctx} present={present} />
   else if (page === 'keputusan') body = <Keputusan {...ctx} />
   else if (page === 'vendor') body = <Vendor {...ctx} />
   else if (page === 'saya') body = <Saya {...ctx} onLogout={async () => { try { await api('/api/auth/logout', { method: 'POST' }) } catch {} setToken(null); setAuthed(false) }} />
   else body = <Beranda {...ctx} />
 
+  if (present) return <div className="min-h-screen bg-cream">{body}</div>
   return (
-    <div className="min-h-screen pb-[84px] sm:pb-0 sm:pl-[220px]">
-      <header className="sticky top-0 z-30 border-b border-line bg-cream/95 backdrop-blur">
+    <div className="min-h-screen pb-[84px] sm:pb-0 sm:pl-[220px] print:p-0">
+      <header className="sticky top-0 z-30 border-b border-line bg-cream/95 backdrop-blur print:hidden">
         <OfflineBar offline={offline} onSync={() => sync().then(load)} />
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-2.5">
           <div>
@@ -123,7 +129,7 @@ function Shell() {
       </header>
 
       {/* desktop side nav */}
-      <nav className="fixed inset-y-0 left-0 hidden w-[220px] flex-col border-r border-line bg-card px-3 py-5 sm:flex">
+      <nav className="fixed inset-y-0 left-0 hidden w-[220px] flex-col border-r border-line bg-card px-3 py-5 sm:flex print:!hidden">
         <div className="mb-6 px-2"><Logo /></div>
         {NAV.map((n) => (
           <a key={n.key} href={`#/${n.key}`} className={`mb-1 flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold ${page === n.key || (!page && n.key === 'beranda') ? 'bg-bata text-cream' : 'text-char/80 hover:bg-tint2'}`}>
@@ -137,8 +143,8 @@ function Shell() {
       <main className="mx-auto max-w-6xl px-4 pt-4">{body}</main>
 
       {/* mobile bottom nav */}
-      <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-line bg-card pb-[env(safe-area-inset-bottom)] sm:hidden">
-        {NAV.map((n) => {
+      <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-line bg-card pb-[env(safe-area-inset-bottom)] sm:hidden print:!hidden">
+        {NAV.filter((n) => !n.desktopOnly).map((n) => {
           const on = page === n.key || (!page && n.key === 'beranda')
           return (
             <a key={n.key} href={`#/${n.key}`} className={`relative flex h-[60px] flex-col items-center justify-center gap-0.5 text-[10.5px] font-semibold ${on ? 'text-bata' : 'text-char/60'}`}>

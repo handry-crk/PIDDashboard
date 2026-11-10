@@ -366,7 +366,7 @@ def report_payload():
     for p in projects:
         if p.get("status") == "dropped":
             continue
-        stages = [{k: s.get(k) for k in ("stage", "state", "plannedStart", "plannedEnd", "actualStart", "actualEnd", "decision")}
+        stages = [{k: s.get(k) for k in ("stage", "state", "plannedStart", "plannedEnd", "actualStart", "actualEnd", "decision", "notes")}
                   for s in p["stages"]]
         fc = None
         d7 = p["stages"][6]["details"] or {}

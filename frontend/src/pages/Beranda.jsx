@@ -1,6 +1,7 @@
 import React from 'react'
 import { go } from '../App.jsx'
 import { Takeaway, Tiles, LaunchCalendar, PipelineByCategory, Funnel, SlaCompliance, LaunchScorecard } from '../overview.jsx'
+import { monthOf, monthSummary } from '../timeline.jsx'
 import { Title, useToast } from '../ui.jsx'
 import { api } from '../api.js'
 
@@ -25,6 +26,11 @@ export default function Beranda({ state, reload }) {
       <Title sub={`Halo, ${state.me.name}`}>Strategic Overview</Title>
       <Takeaway text={state.summary.takeaway} />
       <Tiles s={state.summary} onTile={onTile} />
+      <button onClick={() => go('#/timeline')} className="card mb-6 flex w-full items-center justify-between gap-3 p-3 text-left">
+        <div className="min-w-0"><div className="text-[15px] text-bata"><b className="font-extrabold">Timeline</b> Bulanan</div>
+          <div className="text-[12px] text-char/75">{monthSummary(state.projects, monthOf(state.serverToday), state.serverToday)}</div></div>
+        <span className="shrink-0 text-xl text-bata">→</span>
+      </button>
       <div className="lg:grid lg:grid-cols-[1.4fr_1fr] lg:gap-6">
         <div>
           <LaunchCalendar slots={state.slots} categories={c.categories} order={c.categoryOrder} today={state.serverToday} onSlot={onSlot}

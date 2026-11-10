@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Takeaway, Tiles, LaunchCalendar, PipelineByCategory, LaunchScorecard } from '../overview.jsx'
+import { TimelineMonth, monthOf } from '../timeline.jsx'
 import { Empty, Logo, Section, Sheet, Stepper, StatusPill, fmtTgl, fmtWhen, useToast, ROMAN } from '../ui.jsx'
 
 export default function Laporan() {
@@ -8,6 +9,8 @@ export default function Laporan() {
   const [r, setR] = useState(null)
   const [err, setErr] = useState('')
   const [sel, setSel] = useState(null)
+  const [view, setView] = useState(new URLSearchParams(window.location.search).get('view') === 'timeline' ? 'timeline' : 'ringkasan')
+  const [month, setMonth] = useState(null)
   useEffect(() => {
     const load = () => fetch(`/api/report?t=${encodeURIComponent(t)}`).then(async (x) => {
       if (!x.ok) throw new Error((await x.json()).detail || 'Link tidak valid'); return x.json()
@@ -29,6 +32,14 @@ export default function Laporan() {
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-4 pt-4">
+        <div className="mb-4 flex gap-2 print:hidden">
+          {[['ringkasan', 'Ringkasan'], ['timeline', 'Timeline bulanan']].map(([k, l]) =>
+            <button key={k} onClick={() => setView(k)} className={`min-h-[40px] flex-1 rounded-full border text-sm font-semibold sm:flex-none sm:px-5 ${view === k ? 'border-bata bg-bata text-cream' : 'border-bata text-bata'}`}>{l}</button>)}
+          {view === 'timeline' && <button className="btn-o hidden px-4 text-xs sm:inline-flex" onClick={() => window.print()}>Print / PDF</button>}
+        </div>
+        {view === 'timeline' ? (
+          <div className="pb-8"><TimelineMonth projects={r.projects} categories={c.categories} today={r.serverToday} month={month || monthOf(r.serverToday)} setMonth={setMonth} /></div>
+        ) : <>
         <Takeaway text={r.summary.takeaway} />
         <Tiles s={r.summary} />
         <div className="lg:grid lg:grid-cols-[1.4fr_1fr] lg:gap-6">
@@ -60,6 +71,7 @@ export default function Laporan() {
             </Section>
           </div>
         </div>
+        </>}
         <p className="pb-8 pt-2 text-center text-[11px] text-char/50">PT Citarasa Kuliner Indonesia · data internal, jangan disebarkan di luar CRK</p>
       </main>
       <Sheet open={!!sel} onClose={() => setSel(null)} title={sel?.nama}>
