@@ -200,3 +200,31 @@ export function SlaCompliance({ rows: allRows, byCat, categories, order }) {
     </Section>
   )
 }
+
+export function LaunchScorecard({ sc, categories, onOpen }) {
+  if (!sc) return null
+  const V = { hit: ['Hit', '#2F6B4A'], miss: ['Miss', '#B42F27'], berjalan: ['Berjalan', '#B8741A'], 'belum ada data': ['Belum ada data', '#8A8378'] }
+  return (
+    <Section title="Launch Scorecard" sub="Penjualan 4 minggu setelah launch vs target">
+      <div className="card p-3">
+        <div className="mb-3 grid grid-cols-3 gap-2 text-center">
+          <div className="rounded-lg bg-tint2 p-2"><div className="text-[10.5px] text-char/60">Launched</div><div className="text-lg font-extrabold text-bata">{sc.overall.launched}</div></div>
+          <div className="rounded-lg bg-tint2 p-2"><div className="text-[10.5px] text-char/60">Sudah 4 minggu</div><div className="text-lg font-extrabold">{sc.overall.evaluated}</div></div>
+          <div className="rounded-lg bg-tint2 p-2"><div className="text-[10.5px] text-char/60">Hit rate</div><div className="text-lg font-extrabold text-hijau">{sc.overall.hitRate == null ? '-' : `${sc.overall.hitRate}%`}</div></div>
+        </div>
+        {sc.byCategoryYear.length > 0 && (
+          <div className="mb-3 overflow-hidden rounded-lg border border-line">
+            <table className="w-full text-[12px]"><thead className="bg-bata text-cream"><tr><th className="px-2 py-1.5 text-left">Kategori</th><th className="px-1">Tahun</th><th className="px-1">Launch</th><th className="px-1">Hit</th><th className="px-2 text-right">Hit rate</th></tr></thead>
+              <tbody>{sc.byCategoryYear.map((b) => <tr key={b.year + b.category} className="border-t border-line text-center"><td className="px-2 py-1.5 text-left font-semibold">{categories[b.category].label}</td><td>{b.year}</td><td>{b.launched}</td><td>{b.hit}/{b.evaluated}</td><td className="px-2 text-right font-bold">{b.hitRate == null ? '-' : `${b.hitRate}%`}</td></tr>)}</tbody></table>
+          </div>
+        )}
+        {sc.projects.length ? sc.projects.slice(0, 8).map((r) => (
+          <button key={r.id} onClick={() => onOpen?.(r)} className="mb-1.5 flex w-full items-center justify-between gap-2 border-b border-line pb-1.5 text-left text-[12.5px]">
+            <div className="min-w-0"><div className="truncate font-semibold">{r.nama}</div><div className="text-[11px] text-char/60">{categories[r.category].label} · launch {r.launchedAt ? fmtTgl(r.launchedAt) : '-'} · {r.weeksFilled}/4 minggu</div></div>
+            <div className="shrink-0 text-right"><div className="font-bold">{r.pct == null ? '-' : `${r.pct}%`}</div><Pill color={V[r.verdict][1]}>{V[r.verdict][0]}</Pill></div>
+          </button>
+        )) : <Empty>Belum ada produk yang launch.</Empty>}
+      </div>
+    </Section>
+  )
+}

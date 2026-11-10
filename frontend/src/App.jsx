@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { api, getToken, setToken } from './api.js'
-import { ToastProvider, Logo, fmtWhen } from './ui.jsx'
+import { api, getToken, setToken, getQueue, flushQueue } from './api.js'
+import { ToastProvider, Logo, fmtWhen, useToast } from './ui.jsx'
 import Login from './pages/Login.jsx'
 import Beranda from './pages/Beranda.jsx'
 import Proyek from './pages/Proyek.jsx'
@@ -30,7 +30,21 @@ const NAV = [
   { key: 'saya', label: 'Saya', icon: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm-7 9a7 7 0 0 1 14 0' },
 ]
 
+function OfflineBar({ offline, onSync }) {
+  const [n, setN] = useState(getQueue().length)
+  useEffect(() => { const f = () => setN(getQueue().length); window.addEventListener('pid-queue', f); return () => window.removeEventListener('pid-queue', f) }, [])
+  if (!offline && !n) return null
+  return (
+    <div className={`flex items-center justify-between gap-2 px-4 py-2 text-xs font-semibold text-white ${offline ? 'bg-char' : 'bg-amber'}`}>
+      <span>{offline ? 'Offline — menampilkan data terakhir.' : 'Online kembali.'}{n > 0 && ` ${n} perubahan menunggu dikirim.`}</span>
+      {!offline && n > 0 && <button className="rounded-full border border-white px-3 py-1" onClick={onSync}>Kirim sekarang</button>}
+    </div>
+  )
+}
+
 function Shell() {
+  const toast = useToast()
+  const [offline, setOffline] = useState(!navigator.onLine)
   const [authed, setAuthed] = useState(!!getToken())
   const [state, setState] = useState(null)
   const [err, setErr] = useState(null)
@@ -38,13 +52,27 @@ function Shell() {
   const hash = useHash()
   const timer = useRef(null)
 
+  const sync = useCallback(async () => {
+    if (!getQueue().length) return
+    const r = await flushQueue()
+    if (r.sent) toast(`${r.sent} perubahan offline terkirim`)
+    if (r.failed.length) toast(`${r.failed.length} perubahan ditolak server: ${r.failed[0]}`, 'err')
+  }, [])
   const load = useCallback(async () => {
     if (!getToken()) return
     try {
+      if (navigator.onLine && getQueue().length) await sync()
       const s = await api('/api/state')
-      setState(s); setErr(null); setRefreshedAt(new Date().toISOString())
-    } catch (e) { setErr(e.message) }
-  }, [])
+      setState(s); setErr(null)
+      setOffline(!!s.__offline || !navigator.onLine)
+      if (!s.__offline) setRefreshedAt(new Date().toISOString())
+    } catch (e) { setErr(e.message); setOffline(!navigator.onLine) }
+  }, [sync])
+  useEffect(() => {
+    const on = () => { setOffline(false); load() }, off = () => setOffline(true)
+    window.addEventListener('online', on); window.addEventListener('offline', off)
+    return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off) }
+  }, [load])
 
   useEffect(() => {
     const out = () => { setAuthed(false); setState(null) }
@@ -80,6 +108,7 @@ function Shell() {
   return (
     <div className="min-h-screen pb-[84px] sm:pb-0 sm:pl-[220px]">
       <header className="sticky top-0 z-30 border-b border-line bg-cream/95 backdrop-blur">
+        <OfflineBar offline={offline} onSync={() => sync().then(load)} />
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-2.5">
           <div>
             <div className="text-[19px] leading-none text-bata"><b className="font-extrabold">PID</b> Dashboard</div>
@@ -88,7 +117,7 @@ function Shell() {
           <div className="flex flex-col items-end gap-0.5">
             <a href={`/laporan?t=${state.settings.shareToken}`} target="_blank" rel="noreferrer" className="rounded-full border border-bata px-2.5 py-1 text-[11px] font-bold text-bata sm:hidden">Reporting ↗</a>
             <span className="hidden sm:block"><Logo /></span>
-            <div className="flex items-center gap-1 text-[10px] text-char/50"><span className={`h-1.5 w-1.5 rounded-full ${err ? 'bg-amber' : 'bg-hijau'}`} />{err ? 'Offline' : `Refresh ${fmtWhen(refreshedAt).split(' ').pop()}`}</div>
+            <div className="flex items-center gap-1 text-[10px] text-char/50"><span className={`h-1.5 w-1.5 rounded-full ${err || offline ? 'bg-amber' : 'bg-hijau'}`} />{err || offline ? 'Offline' : `Refresh ${fmtWhen(refreshedAt).split(' ').pop()}`}</div>
           </div>
         </div>
       </header>

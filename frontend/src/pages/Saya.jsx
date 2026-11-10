@@ -211,6 +211,7 @@ function Admin({ state, reload }) {
       </Section>
 
       <WhatsApp members={state.members} me={me} />
+      <LaunchBoardSettings />
       {me.isAdmin && <AdminPin />}
 
       <Sheet open={!!pinFor} onClose={() => setPinFor(null)} title={`Reset PIN · ${pinFor?.name}`} footer={<button className="btn-p w-full" disabled={!/^\d{4,6}$/.test(pin)}
@@ -292,6 +293,40 @@ function WhatsApp({ members, me }) {
             </div>
           ))}
         </>}
+      </div>
+    </Section>
+  )
+}
+
+function LaunchBoardSettings() {
+  const toast = useToast()
+  const [c, setC] = useState(null)
+  const [sheet, setSheet] = useState('')
+  const load = () => api('/api/launchboard').then((r) => { setC(r); setSheet(r.sheetId) }).catch(() => {})
+  useEffect(() => { load() }, [])
+  if (!c) return null
+  const save = (patch) => api('/api/settings', { method: 'PUT', body: patch }).then(() => { toast('Tersimpan'); load() }).catch((e) => toast(e.message, 'err'))
+  const copy = (t) => navigator.clipboard.writeText(t).then(() => toast('Tersalin')).catch(() => {})
+  return (
+    <Section title="Product Launch Board" sub="Sinkron hand-off stage VII ke Google Sheet">
+      <div className="card p-3 text-sm">
+        <div className={`mb-3 rounded-lg p-2 text-xs ${c.configured ? 'bg-[#DCEADF]' : 'bg-[#F5E6CC]'}`}>
+          {c.configured ? <>Service account aktif: <b className="break-all">{c.serviceEmail}</b> <button className="ml-1 font-semibold text-bata underline" onClick={() => copy(c.serviceEmail)}>Copy</button></>
+            : <>Belum terhubung. Buat service account di Google Cloud (aktifkan Google Sheets API), download key JSON, lalu tempel seluruh isinya ke variable <b>GOOGLE_SERVICE_ACCOUNT_JSON</b> di Railway.</>}
+        </div>
+        {c.configured && <div className="mb-3 text-xs text-char/70">Share Google Sheet Product Launch Board ke email service account di atas sebagai <b>Editor</b>.</div>}
+        <Field label="Spreadsheet ID">
+          <div className="grid grid-cols-[1fr_auto] gap-2"><input className="inp" value={sheet} onChange={(e) => setSheet(e.target.value.trim())} />
+            <button className="btn-o px-3" onClick={() => save({ launchSheetId: sheet })}>Simpan</button></div>
+        </Field>
+        <label className="mb-3 flex min-h-[40px] items-center justify-between gap-3 border-b border-line text-[13px]">
+          <span>Sinkron otomatis (masuk stage VII, update checklist, launch)</span>
+          <input type="checkbox" className="h-5 w-5 accent-bata" checked={!!c.auto} onChange={(e) => save({ launchBoardAuto: e.target.checked })} />
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          <button className="btn-p text-xs" disabled={!c.configured} onClick={() => api('/api/launchboard/test', { method: 'POST' }).then(() => toast('Koneksi ke Sheet berhasil, header tab Tasks sesuai')).catch((e) => toast(e.message, 'err'))}>Tes koneksi</button>
+          <a className="btn-o text-xs" href={`https://docs.google.com/spreadsheets/d/${c.sheetId}/edit`} target="_blank" rel="noreferrer">Buka Sheet ↗</a>
+        </div>
       </div>
     </Section>
   )

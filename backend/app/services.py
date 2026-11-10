@@ -233,6 +233,57 @@ def sla_compliance(projects, settings, category=None):
     return rows
 
 
+# ---------- post-launch scorecard ----------
+def project_scorecard(p):
+    det = p["stages"][6].get("details") or {}
+    try:
+        target = D.num(det.get("targetPorsiMinggu"))
+    except ValueError:
+        target = None
+    weeks = []
+    for w in (det.get("salesWeeks") or [])[:4]:
+        try:
+            weeks.append(D.num(w))
+        except ValueError:
+            weeks.append(None)
+    weeks += [None] * (4 - len(weeks))
+    filled = [w for w in weeks if w is not None]
+    actual = sum(filled) if filled else None
+    tgt_total = target * len(filled) if target and filled else None
+    pct = round(actual / tgt_total * 100) if tgt_total else None
+    weekly_pct = [round(w / target * 100) if (w is not None and target) else None for w in weeks]
+    if len(filled) == 4 and pct is not None:
+        verdict = "hit" if pct >= 100 else "miss"
+    else:
+        verdict = "berjalan" if filled else "belum ada data"
+    return {"target": target, "weeks": weeks, "weeklyPct": weekly_pct, "actual": actual, "targetTotal": tgt_total,
+            "pct": pct, "weeksFilled": len(filled), "verdict": verdict, "decision": det.get("postDecision") or None}
+
+
+def scorecard(projects):
+    launched = [p for p in projects if p.get("status") == "done"]
+    rows, by = [], {}
+    for p in launched:
+        sc = project_scorecard(p)
+        year = (p.get("launchedAt") or "")[:4]
+        rows.append({"id": p["id"], "kode": p["kode"], "nama": (p["stages"][6].get("details") or {}).get("namaMenu") or p["nama"],
+                     "category": p["category"], "launchedAt": p.get("launchedAt"), "year": year, **sc})
+        key = (year, p["category"])
+        b = by.setdefault(key, {"year": year, "category": p["category"], "launched": 0, "evaluated": 0, "hit": 0})
+        b["launched"] += 1
+        if sc["verdict"] in ("hit", "miss"):
+            b["evaluated"] += 1
+            b["hit"] += sc["verdict"] == "hit"
+    for b in by.values():
+        b["hitRate"] = round(b["hit"] / b["evaluated"] * 100) if b["evaluated"] else None
+    rows.sort(key=lambda r: r.get("launchedAt") or "", reverse=True)
+    summary_rows = sorted(by.values(), key=lambda b: (b["year"], D.CATEGORY_ORDER.index(b["category"])), reverse=True)
+    ev = [r for r in rows if r["verdict"] in ("hit", "miss")]
+    return {"projects": rows, "byCategoryYear": summary_rows,
+            "overall": {"launched": len(rows), "evaluated": len(ev), "hit": sum(r["verdict"] == "hit" for r in ev),
+                        "hitRate": round(sum(r["verdict"] == "hit" for r in ev) / len(ev) * 100) if ev else None}}
+
+
 # ---------- weekly text ----------
 def weekly_text(projects, slots, settings):
     t = D.today()
@@ -291,6 +342,7 @@ def build_state(member):
         "funnel": funnel(projects, kandidat),
         "slaCompliance": sla_compliance(projects, settings),
         "slaComplianceByCat": {c: sla_compliance(projects, settings, c) for c in D.CATEGORY_ORDER},
+        "scorecard": scorecard(projects),
         "kandidat": [{k: x.get(k) for k in ("id", "projectId", "nama", "status", "screeningTotal")} for x in kandidat],
         "serverToday": D.fdate(D.today()),
     }
@@ -330,6 +382,7 @@ def report_payload():
         "slots": [{k: s.get(k) for k in ("id", "category", "period", "label", "flags", "project")} for s in slots],
         "projects": pub,
         "launched": launched,
+        "scorecard": scorecard(projects),
         "weeklyText": settings.get("lastWeeklyText") or weekly_text(projects, slots, settings),
         "weeklyAt": settings.get("lastWeeklyAt"),
     }

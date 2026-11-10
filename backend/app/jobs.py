@@ -150,18 +150,14 @@ def job_weekly(force=False):
 
 def job_backup(force=False):
     db = get_db()
-    os.makedirs(config.BACKUP_DIR, exist_ok=True)
+    from . import storage as ST
     data = {c: clean_all(db[c].find({})) for c in
-            ["members", "projects", "kandidat", "bom", "vendors", "slots", "activity", "comments", "settings", "files", "surveys", "responses", "walog"]}
+            ["members", "projects", "kandidat", "bom", "vendors", "slots", "activity", "comments", "settings", "files", "surveys", "responses", "walog", "vendorPrices"]}
     name = f"pid-backup-{datetime.now(config.TZ).strftime('%Y%m%d-%H%M%S')}.json"
-    path = os.path.join(config.BACKUP_DIR, name)
-    with open(path, "w") as f:
-        json.dump(data, f, default=str)
-    files = sorted(x for x in os.listdir(config.BACKUP_DIR) if x.startswith("pid-backup-"))
-    for old in files[:-8]:
-        os.remove(os.path.join(config.BACKUP_DIR, old))
-    _log_reminder("backup", [], {"file": name})
-    return {"ok": True, "file": name}
+    loc = ST.save(name, json.dumps(data, default=str).encode(), "application/json", prefix="backups")
+    ST.prune_backups(8)
+    _log_reminder("backup", [], {"file": name, "storage": loc["storage"]})
+    return {"ok": True, "file": name, "storage": loc["storage"]}
 
 
 def settings_link(settings):
@@ -185,6 +181,10 @@ def tick():
             job_digest()
         if wd == s.get("weeklyDay", 1) and hm >= s.get("weeklyTime", "08:30"):
             job_weekly()
+        if hm >= "00:05" and not _already("prices"):
+            from . import pricing as PR
+            res = PR.apply_prices()
+            _log_reminder("prices", [], res)
         if wd == 7 and hm >= "02:00" and not _already("backup"):
             job_backup()
     except Exception as e:  # pragma: no cover

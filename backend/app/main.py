@@ -17,7 +17,8 @@ from .auth import (hash_pin, verify_pin, new_session, current_member, is_head, i
 from .db import get_db, clean, clean_all, ping
 from .seed import seed_whiteboard
 from .survey import router as survey_router, _survey_info
-from . import wa as WA
+from . import wa as WA, launchboard as LB, pricing as PR, storage as ST
+from fastapi.responses import RedirectResponse
 
 from contextlib import asynccontextmanager
 
@@ -160,8 +161,7 @@ def _project_detail(pid):
         k["screeningTotal"] = S_total(k, settings)
         versions = sorted({l.get("versi") or "v1" for l in k["bom"]}, key=D.versi_key) or ["v1"]
         k["hppByVersi"] = {v: D.compute_hpp(k["bom"], v) for v in versions}
-        latest = versions[-1]
-        k["hpp"] = k["hppByVersi"].get(latest, 0)
+        k["activeVersi"], k["hpp"] = PR.kandidat_hpp(k, k["bom"])
         k["porsiHpp"] = D.porsi_rows(k.get("recipe"), k.get("concept"), k["hpp"])
         k["foodCostPct"] = k["porsiHpp"][0]["foodCostPct"]
         fcs = [r["foodCostPct"] for r in k["porsiHpp"] if r["foodCostPct"] is not None]
@@ -180,7 +180,7 @@ def _project_detail(pid):
     for f in files:
         f.pop("path", None)
     return {"project": ep, "kandidat": ks, "timeline": _timeline(pid), "files": files,
-            "survey": _survey_info(pid), "targetFoodCostPct": settings["targetFoodCostPct"].get(p["category"], 35)}
+            "survey": _survey_info(pid), "scorecard": S.project_scorecard(p), "targetFoodCostPct": settings["targetFoodCostPct"].get(p["category"], 35)}
 
 
 def _timeline(pid):
@@ -402,6 +402,7 @@ def move_stage(pid: str, body: dict = Body(...), me=Depends(current_member)):
             _save_project(p, {"stages": p["stages"], "status": "done", "launchedAt": (st.get("details") or {}).get("launchDate") or today})
             _promote_kandidat(pid, 8)
             S.log_activity(pid, me, "launch", frm=cur, to="launch", note=note or "Komersialisasi selesai — produk launch")
+            LB.sync_async(pid)
             return _project_detail(pid)
         ns = p["stages"][nxt - 1]
         ns["state"], ns["actualStart"], ns["actualEnd"] = "in_progress", today, None
@@ -410,6 +411,8 @@ def move_stage(pid: str, body: dict = Body(...), me=Depends(current_member)):
                           "status": p["status"] if p["status"] in ("blocked",) else "on_track"})
         _promote_kandidat(pid, nxt)
         S.log_activity(pid, me, "stage_advance", frm=cur, to=nxt, note=note)
+        if nxt == 7:
+            LB.sync_async(pid)
         return _project_detail(pid)
     if to == prv and prv >= 1:
         if not note:
@@ -591,6 +594,7 @@ def update_handoff(pid: str, body: dict = Body(...), me=Depends(current_member))
         raise HTTPException(400, "Format checklist tidak valid")
     _save_project(p, {"handoff": items})
     S.log_activity(pid, me, "edit", note="Update checklist hand-off")
+    LB.sync_async(pid)
     return _project_detail(pid)
 
 
@@ -747,7 +751,12 @@ def _validate_bom(k, body):
         raise HTTPException(400, "Isi qty bahan per porsi lebih dari 0")
     if harga < 0:
         raise HTTPException(400, "Harga bahan tidak boleh negatif")
-    return {"bahan": body["bahan"].strip(), "vendorId": vid, "inhouse": bool(body.get("inhouse")),
+    auto = body.get("autoPrice", True) if vid else False
+    if vid and not harga:
+        pr = PR.current_price(vid, body["bahan"])
+        if pr and PR.UNIT_FOR_BOM.get(pr["unit"]) == body.get("unit", "g"):
+            harga = pr["harga"]
+    return {"bahan": body["bahan"].strip(), "vendorId": vid, "inhouse": bool(body.get("inhouse")), "autoPrice": bool(auto),
             "qty": qty, "unit": body.get("unit", "g"), "hargaPerUnit": harga, "versi": (body.get("versi") or "v1").strip()}
 
 
@@ -760,6 +769,7 @@ def add_bom(kid: str, body: dict = Body(...), me=Depends(current_member)):
     line["biayaPerPorsi"] = round(D.bom_line_cost(line), 2)
     get_db().bom.insert_one(line)
     S.log_activity(k["projectId"], me, "bom", note=f"BOM {k['nama']}: + {line['bahan']}", kandidat_id=kid)
+    PR.record_hpp(kid, f"Tambah bahan {line['bahan']}")
     return clean(line)
 
 
@@ -775,13 +785,17 @@ def update_bom(lid: str, body: dict = Body(...), me=Depends(current_member)):
     line = _validate_bom(k, merged)
     line["biayaPerPorsi"] = round(D.bom_line_cost(line), 2)
     db.bom.update_one({"id": lid}, {"$set": line})
+    PR.record_hpp(l["kandidatId"], f"Ubah bahan {line['bahan']}")
     return {"ok": True}
 
 
 @app.delete("/api/bom/{lid}")
 def delete_bom(lid: str, me=Depends(current_member)):
     require(is_editor(me) or me["role"] == "pid_staff")
+    l = get_db().bom.find_one({"id": lid})
     get_db().bom.delete_one({"id": lid})
+    if l:
+        PR.record_hpp(l["kandidatId"], f"Hapus bahan {l['bahan']}")
     return {"ok": True}
 
 
@@ -798,6 +812,7 @@ def _vendor_out(v):
     kids = {l["kandidatId"] for l in db.bom.find({"vendorId": v["id"]})}
     pids = {k["projectId"] for k in db.kandidat.find({"id": {"$in": list(kids)}})}
     v["usedIn"] = [{"id": p["id"], "kode": p["kode"], "nama": p["nama"]} for p in db.projects.find({"id": {"$in": list(pids)}})]
+    v["prices"] = PR.price_list(v["id"])["current"]
     v["files"] = [{k: f.get(k) for k in ("id", "name", "url", "kind", "contentType", "at", "byName")}
                   for f in db.files.find({"vendorId": v["id"]})]
     return v
@@ -874,11 +889,8 @@ async def upload_file(file: UploadFile = File(...), projectId: str = Form(""), k
             data, ext, ctype = buf.getvalue(), ".jpg", "image/jpeg"
         except Exception:
             pass
-    os.makedirs(config.UPLOAD_DIR, exist_ok=True)
-    path = os.path.join(config.UPLOAD_DIR, fid + ext)
-    with open(path, "wb") as f:
-        f.write(data)
-    meta = {"id": fid, "name": file.filename, "path": path, "contentType": ctype, "size": len(data), "kind": kind,
+    loc = ST.save(fid + ext, data, ctype)
+    meta = {"id": fid, "name": file.filename, **loc, "contentType": ctype, "size": len(data), "kind": kind,
             "projectId": projectId or None, "kandidatId": kandidatId or None, "vendorId": vendorId or None,
             "stage": stage or None, "byId": me["id"], "byName": me["name"], "at": D.now_utc_iso(), "url": f"/api/files/{fid}"}
     get_db().files.insert_one(meta)
@@ -888,6 +900,7 @@ async def upload_file(file: UploadFile = File(...), projectId: str = Form(""), k
         S.log_activity(projectId, me, "file", to=stage or None, note=f"Upload {file.filename}", kandidat_id=kandidatId or None)
     out = clean(meta)
     out.pop("path", None)
+    out.pop("key", None)
     return out
 
 
@@ -901,17 +914,18 @@ def delete_file(fid: str, me=Depends(current_member)):
     db.files.delete_one({"id": fid})
     url = f"/api/files/{fid}"
     db.kandidat.update_many({"photos": url}, {"$pull": {"photos": url}})
-    try:
-        os.remove(m["path"])
-    except OSError:
-        pass
+    ST.delete(m)
     return {"ok": True}
 
 
 @app.get("/api/files/{fid}")
 def get_file(fid: str):
     m = get_db().files.find_one({"id": fid})
-    if not m or not os.path.exists(m["path"]):
+    if not m:
+        raise HTTPException(404, "File tidak ditemukan")
+    if m.get("storage") == "s3":
+        return RedirectResponse(ST.url_for(m), status_code=302)
+    if not m.get("path") or not os.path.exists(m["path"]):
         raise HTTPException(404, "File tidak ditemukan")
     return FileResponse(m["path"], media_type=m["contentType"], filename=m.get("name"))
 
@@ -997,7 +1011,7 @@ def update_settings(body: dict = Body(...), me=Depends(current_member)):
     allowed = {"appName", "slaDays", "cadence", "launchTargetPerYear", "screeningCriteria", "screeningPassScore",
                "targetFoodCostPct", "slotStart", "digestTime", "nudgeTime", "weeklyDay", "weeklyTime", "workDays", "adminEmail", "stalledDays"}
     upd = {k: v for k, v in body.items() if k in allowed}
-    for k in ("waEnabled", "waGroup", "waEvents"):
+    for k in ("waEnabled", "waGroup", "waEvents", "launchSheetId", "launchBoardAuto"):
         if k in body:
             upd[k] = body[k]
     if body.get("waToken"):
@@ -1136,6 +1150,78 @@ def wa_test(body: dict = Body(default={}), me=Depends(current_member)):
     if not res["ok"]:
         raise HTTPException(400, f"WhatsApp gagal terkirim: {res['reason']}")
     return res
+
+
+# ======================= Product Launch Board =======================
+@app.get("/api/launchboard")
+def launchboard_status(me=Depends(current_member)):
+    return LB.lb_settings()
+
+
+@app.post("/api/launchboard/test")
+def launchboard_test(me=Depends(current_member)):
+    require(is_head(me), "Hanya PID Head / Admin")
+    try:
+        return LB.test_connection()
+    except Exception as e:
+        raise HTTPException(400, f"Koneksi ke Google Sheet gagal: {e}")
+
+
+@app.post("/api/projects/{pid}/launchboard/sync")
+def launchboard_sync(pid: str, me=Depends(current_member)):
+    require(is_editor(me))
+    p = _project(pid)
+    if p["currentStage"] < 7 and p["status"] != "done":
+        raise HTTPException(400, "Sinkron ke Launch Board tersedia mulai stage VII Komersialisasi")
+    st = LB.sync(pid, me)
+    if not st["ok"]:
+        raise HTTPException(400, f"Sinkron gagal: {st.get('reason')}")
+    return _project_detail(pid)
+
+
+# ======================= vendor prices =======================
+@app.get("/api/vendors/{vid}/prices")
+def vendor_prices(vid: str, me=Depends(current_member)):
+    return PR.price_list(vid)
+
+
+@app.post("/api/vendors/{vid}/prices")
+def add_vendor_price(vid: str, body: dict = Body(...), me=Depends(current_member)):
+    require(is_editor(me))
+    db = get_db()
+    if not db.vendors.find_one({"id": vid}):
+        raise HTTPException(404, "Vendor tidak ditemukan")
+    bahan = (body.get("bahan") or "").strip()
+    if not bahan:
+        raise HTTPException(400, "Isi nama bahan")
+    if body.get("unit", "kg") not in PR.UNIT_FOR_BOM:
+        raise HTTPException(400, "Satuan harga harus kg, liter, atau pcs")
+    try:
+        harga = D.num(body.get("harga"))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    if not harga or harga <= 0:
+        raise HTTPException(400, "Isi harga lebih dari 0")
+    mulai = body.get("berlakuMulai") or D.fdate(D.today())
+    if not D.pdate(mulai):
+        raise HTTPException(400, "Tanggal berlaku tidak valid")
+    row = {"id": D.new_id(), "vendorId": vid, "bahan": bahan, "unit": body.get("unit", "kg"), "harga": harga,
+           "berlakuMulai": mulai, "catatan": body.get("catatan", ""), "byName": me["name"], "at": D.now_utc_iso()}
+    db.vendorPrices.insert_one(row)
+    res = PR.apply_prices(vid, me) if mulai <= D.fdate(D.today()) else {"kandidatUpdated": 0, "alerts": [], "terjadwal": True}
+    return {"price": clean(row), **res, **PR.price_list(vid)}
+
+
+@app.delete("/api/prices/{prid}")
+def delete_vendor_price(prid: str, me=Depends(current_member)):
+    require(is_editor(me))
+    db = get_db()
+    r = db.vendorPrices.find_one({"id": prid})
+    if not r:
+        raise HTTPException(404, "Harga tidak ditemukan")
+    db.vendorPrices.delete_one({"id": prid})
+    PR.apply_prices(r["vendorId"], me)
+    return PR.price_list(r["vendorId"])
 
 
 # ======================= static frontend =======================

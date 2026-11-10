@@ -25,7 +25,7 @@ USE_MOCK_DB=true UPLOAD_DIR=./data/uploads uvicorn app.main:app --reload --port 
 cd frontend && npm install && npm run dev
 
 # test
-cd backend && pytest -q
+cd backend && pip install -r requirements-dev.txt && pytest -q
 ```
 
 ## Go-live Railway
@@ -71,6 +71,26 @@ User pertama = Admin. Admin PIN fallback default `1234` (ubah di Panel Admin).
 | Weekly Update | Grup WhatsApp |
 
 Tiap event bisa dimatikan; semua pengiriman tercatat di log Panel Admin. Token tidak pernah dikirim ke browser.
+
+## Sinkron ke Product Launch Board (Google Sheet)
+1. Google Cloud Console → buat project → aktifkan **Google Sheets API** → buat **Service Account** → Keys → Add key → JSON.
+2. Railway → Variables → `GOOGLE_SERVICE_ACCOUNT_JSON` = seluruh isi file JSON tersebut.
+3. Share Google Sheet **CRK Product Launch Tracker** ke email service account (terlihat di Panel Admin) sebagai **Editor**.
+4. Panel Admin → Product Launch Board → **Tes koneksi**.
+
+Saat proyek masuk stage VII, checklist hand-off dikirim ke tab **Tasks** (ID `PID-<kode>` untuk PID dan `<KODE DIVISI>-<kode>-<ITEM>` untuk tiap divisi, mis. `MKT-VC-2702-01-LISTING`). Baris yang sudah ada diperbarui (tidak dobel); baris lain di sheet tidak disentuh. Sinkron otomatis saat checklist berubah dan saat launch, atau manual lewat tombol **Sinkron sekarang**.
+
+## Riwayat harga vendor
+Halaman Vendor → pilih vendor → **Daftar harga bahan**: isi harga per kg/liter/pcs dan tanggal berlaku. Bahan BOM yang memakai vendor tersebut (dengan nama bahan sama dan label *Ikut harga vendor*) ikut berubah otomatis, HPP dicatat di **Tren HPP**, dan PIC + PID Head menerima WhatsApp bila food cost naik melewati target. Harga terjadwal diterapkan otomatis pada tanggalnya.
+
+## Scorecard setelah launch
+Stage VII → isi target porsi per minggu dan penjualan minggu 1–4 (tetap bisa diisi setelah launch). Hit = total 4 minggu ≥ 100% target. Hit rate per kategori per tahun tampil di Beranda dan Reporting.
+
+## Mode offline (PWA)
+Buka dashboard di HP → menu browser → **Add to Home Screen**. Data terakhir tetap bisa dibuka tanpa sinyal; perubahan yang diisi saat offline disimpan di HP dan dikirim otomatis saat online (upload foto tetap butuh koneksi).
+
+## Penyimpanan S3 (opsional)
+Isi `S3_BUCKET`, `S3_KEY`, `S3_SECRET` (+ `S3_ENDPOINT` untuk Cloudflare R2 / MinIO, `S3_REGION`). Upload dan backup mingguan pindah ke bucket; file lama di volume tetap terbaca.
 
 ## Survey responden (stage VI)
 Di stage Pengujian Prototipe: **Buat & buka survey** → download QR → tempel di outlet. Responden mengisi tanpa login; hasil terisi otomatis dan survey tertutup saat target responden / tanggal selesai tercapai.

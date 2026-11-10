@@ -78,7 +78,12 @@ export default function ProjectDetail({ id, state, reload }) {
   useEffect(() => { load() }, [load, summaryP?.updatedAt, summaryP?.lastActivityAt])
 
   const run = async (fn, okMsg) => {
-    try { const r = await fn(); if (r && r.project) setD(r); else await load(); reload(); if (okMsg) toast(okMsg); return true } catch (e) { toast(e.message, 'err'); return false }
+    try {
+      const r = await fn()
+      if (r && r.queued) { toast('Offline: perubahan disimpan dan dikirim otomatis saat online'); return true }
+      if (r && r.project) setD(r); else await load()
+      reload(); if (okMsg) toast(okMsg); return true
+    } catch (e) { toast(e.message, 'err'); return false }
   }
   if (!d) return <div className="py-10 text-center text-sm text-char/60">Memuat proyek…</div>
   const p = d.project
@@ -170,7 +175,7 @@ export default function ProjectDetail({ id, state, reload }) {
         {active === 4 && <Stage4 st={st} ks={visibleK} editor={editor && !closed} saveDet={saveDet} saveK={saveK} />}
         {active === 5 && <Stage5 d={d} id={id} ks={visibleK} state={state} p={p} can={canEditStage(5) && !closed} run={run} saveK={saveK} saveDet={saveDet} st={st} reload={load} />}
         {active === 6 && <Stage6 st={st} ks={visibleK} can={canEditStage(6) && !closed} saveDet={saveDet} saveK={saveK} d={d} id={id} reload={load} />}
-        {active === 7 && <Stage7 st={st} p={p} d={d} editor={editor && !closed} saveDet={saveDet} run={run} id={id} targetFc={d.targetFoodCostPct} />}
+        {active === 7 && <Stage7 st={st} p={p} d={d} editor={editor && !closed} postEditor={editor && p.status !== 'dropped'} saveDet={saveDet} run={run} id={id} targetFc={d.targetFoodCostPct} />}
 
         <Box title="Catatan stage">
           <Auto rows={3} value={st.notes} disabled={!canEditStage(active) || closed} onSave={(v) => saveStage(active, { notes: v })} placeholder="Catatan, blocker, link referensi…" />
@@ -446,6 +451,29 @@ function PorsiTable({ k, r, can, saveK, targetFc, template }) {
     </div>
   )
 }
+function HppTrend({ hist }) {
+  const [open, setOpen] = useState(false)
+  const pts = hist.slice(-12)
+  const max = Math.max(...pts.map((h) => h.hpp)), min = Math.min(...pts.map((h) => h.hpp))
+  const span = Math.max(1, max - min)
+  const W = 260, Hh = 44
+  const xy = pts.map((h, i) => [pts.length === 1 ? W / 2 : (i / (pts.length - 1)) * W, Hh - 6 - ((h.hpp - min) / span) * (Hh - 12)])
+  const last = pts[pts.length - 1], first = pts[0]
+  const delta = last.hpp - first.hpp
+  return (
+    <div className="mb-3 rounded-lg border border-line bg-white/50 p-2">
+      <div className="flex items-center justify-between text-[11.5px]"><b>Tren HPP porsi dasar</b>
+        <span className={delta > 0 ? 'font-bold text-bata' : delta < 0 ? 'font-bold text-hijau' : ''}>{delta > 0 ? '▲' : delta < 0 ? '▼' : '='} {fmtRp(Math.abs(delta))}</span></div>
+      <svg viewBox={`0 0 ${W} ${Hh}`} className="mt-1 h-11 w-full" preserveAspectRatio="none">
+        <polyline fill="none" stroke="#B42F27" strokeWidth="2" points={xy.map((p) => p.join(',')).join(' ')} />
+        {xy.map((p, i) => <circle key={i} cx={p[0]} cy={p[1]} r="2.5" fill="#B42F27" />)}
+      </svg>
+      <button className="text-[11px] font-semibold text-bata underline" onClick={() => setOpen(!open)}>{open ? 'Tutup riwayat' : 'Lihat riwayat'}</button>
+      {open && [...hist].reverse().map((h, i) => <div key={i} className="border-t border-line py-1 text-[11px]"><b>{fmtRp(h.hpp)}</b> · {fmtTgl(h.date)} · {h.versi}<div className="text-char/60">{h.reason}</div></div>)}
+    </div>
+  )
+}
+
 const showNumP = (n) => (n === null || n === undefined || n === '') ? '' : String(n).replace('.', ',')
 
 function ProtoCard({ k, id, p, vendors, can, run, saveK, targetFc, files, reload, template }) {
@@ -455,11 +483,12 @@ function ProtoCard({ k, id, p, vendors, can, run, saveK, targetFc, files, reload
   const addLine = () => {
     const qty = parseNum(line.qty), harga = parseNum(line.hargaPerUnit)
     if (Number.isNaN(qty) || Number.isNaN(harga)) return run(() => Promise.reject(new Error('Qty / harga tidak valid. Contoh: 4,5 atau 120.000')))
-    return run(() => api(`/api/kandidat/${k.id}/bom`, { method: 'POST', body: { ...line, versi: r.versi || line.versi, qty, hargaPerUnit: harga, vendorId: line.vendorId || null } }), 'Bahan ditambahkan')
+    return run(() => api(`/api/kandidat/${k.id}/bom`, { method: 'POST', body: { ...line, versi: r.versi || line.versi, qty, hargaPerUnit: harga ?? 0, vendorId: line.vendorId || null } }), 'Bahan ditambahkan')
       .then((ok) => ok && setLine({ ...line, bahan: '', qty: '', hargaPerUnit: '', vendorId: '', inhouse: false }))
   }
   const fcOver = k.maxFoodCostPct != null && k.maxFoodCostPct > targetFc
   const selectable = vendors.filter((v) => v.statusVendor !== 'blacklist')
+  const vendorPrices = (vendors.find((v) => v.id === line.vendorId)?.prices) || []
   const photos = files.filter((f) => f.kandidatId === k.id && f.kind === 'photo')
   return (
     <Box title={`Prototipe · ${k.nama}`}>
@@ -470,6 +499,7 @@ function ProtoCard({ k, id, p, vendors, can, run, saveK, targetFc, files, reload
       </div>
       {fcOver && <div className="mb-2 text-xs font-semibold text-amber">Ada porsi dengan food cost di atas target {targetFc}%.</div>}
       {k.halalWarnings?.length > 0 && <div className="mb-2 rounded-lg bg-[#F5E6CC] p-2 text-xs">Sertifikat halal vendor akan habis &lt; 30 hari: {k.halalWarnings.join(', ')}</div>}
+      {(k.hppHistory || []).length > 1 && <HppTrend hist={k.hppHistory} />}
       <PorsiTable k={k} r={r} can={can} saveK={saveK} targetFc={targetFc} template={template} />
       <Field label="Versi resep aktif"><Auto value={r.versi || 'v1'} disabled={!can} onSave={sv('versi')} /></Field>
       {Object.keys(k.hppByVersi || {}).length > 1 && <div className="mb-2 text-[11px] text-char/65">HPP per versi: {Object.entries(k.hppByVersi).map(([v, h]) => `${v} ${fmtRp(h)}`).join(' · ')}</div>}
@@ -482,7 +512,9 @@ function ProtoCard({ k, id, p, vendors, can, run, saveK, targetFc, files, reload
             {k.bom.map((l) => (
               <tr key={l.id} className="border-t border-line">
                 <td className="px-2 py-1.5"><div className="font-semibold">{l.bahan} <span className="text-[10px] font-normal text-abu">{l.versi}</span></div>
-                  <div className="text-[10.5px] text-char/55">{l.vendorNama || (l.inhouse ? 'In-house' : '-')} · {fmtRp(l.hargaPerUnit)}/{l.unit === 'pcs' ? 'pcs' : l.unit === 'ml' ? 'liter' : 'kg'}</div></td>
+                  <div className="text-[10.5px] text-char/55">{l.vendorNama || (l.inhouse ? 'In-house' : '-')} · {fmtRp(l.hargaPerUnit)}/{l.unit === 'pcs' ? 'pcs' : l.unit === 'ml' ? 'liter' : 'kg'}</div>
+                  {l.vendorId && <button disabled={!can} onClick={() => run(() => api(`/api/bom/${l.id}`, { method: 'PUT', body: { autoPrice: !l.autoPrice } }))}
+                    className={`mt-0.5 rounded-full border px-1.5 text-[9.5px] font-semibold ${l.autoPrice ? 'border-hijau text-hijau' : 'border-abu text-abu'}`}>{l.autoPrice ? 'Ikut harga vendor' : 'Harga manual'}</button>}</td>
                 <td className="px-1 text-right">{showNumP(l.qty)} {l.unit}</td>
                 <td className="px-2 text-right font-semibold">{fmtRp(l.biayaPerPorsi)}</td>
                 <td>{can && <button className="h-8 w-7 text-bata" onClick={() => run(() => api(`/api/bom/${l.id}`, { method: 'DELETE' }))}>×</button>}</td>
@@ -498,12 +530,18 @@ function ProtoCard({ k, id, p, vendors, can, run, saveK, targetFc, files, reload
             <input className="inp col-span-2" placeholder="Nama bahan" value={line.bahan} onChange={(e) => setLine({ ...line, bahan: e.target.value })} />
             <input className="inp" inputMode="decimal" placeholder="Qty/porsi" value={line.qty} onChange={(e) => setLine({ ...line, qty: e.target.value })} />
             <select className="inp" value={line.unit} onChange={(e) => setLine({ ...line, unit: e.target.value })}><option value="g">gram</option><option value="ml">ml</option><option value="pcs">pcs</option></select>
-            <input className="inp col-span-2" inputMode="decimal" placeholder={`Harga per ${line.unit === 'pcs' ? 'pcs' : line.unit === 'ml' ? 'liter' : 'kg'} (Rp)`} value={line.hargaPerUnit} onChange={(e) => setLine({ ...line, hargaPerUnit: e.target.value })} />
             <select className="inp col-span-2" value={line.inhouse ? '__inhouse' : line.vendorId} onChange={(e) => setLine({ ...line, inhouse: e.target.value === '__inhouse', vendorId: e.target.value === '__inhouse' ? '' : e.target.value })}>
               <option value="">{p.category === 'online_food' ? 'Pilih vendor (wajib)' : 'Vendor (opsional)'}</option>
               <option value="__inhouse">In-house</option>
               {selectable.map((v) => <option key={v.id} value={v.id}>{v.nama}{v.statusVendor !== 'approved' ? ` (${v.statusVendor})` : ''}{v.halalWarning ? ' ⚠ halal' : ''}</option>)}
             </select>
+            {vendorPrices.length > 0 && (
+              <select className="inp col-span-2" value="" onChange={(e) => { const pr = vendorPrices.find((x) => x.id === e.target.value); if (pr) setLine({ ...line, bahan: pr.bahan, unit: { kg: 'g', liter: 'ml', pcs: 'pcs' }[pr.unit], hargaPerUnit: '' }) }}>
+                <option value="">Pilih dari daftar harga vendor…</option>
+                {vendorPrices.map((x) => <option key={x.id} value={x.id}>{x.bahan} · {fmtRp(x.harga)}/{x.unit}</option>)}
+              </select>
+            )}
+            <input className="inp col-span-2" inputMode="decimal" placeholder={line.vendorId && vendorPrices.some((x) => x.bahan.toLowerCase() === line.bahan.trim().toLowerCase()) ? 'Kosongkan = pakai harga vendor terbaru' : `Harga per ${line.unit === 'pcs' ? 'pcs' : line.unit === 'ml' ? 'liter' : 'kg'} (Rp)`} value={line.hargaPerUnit} onChange={(e) => setLine({ ...line, hargaPerUnit: e.target.value })} />
           </div>
           <button className="btn-o mt-2 w-full" disabled={!line.bahan || !line.qty} onClick={addLine}>+ Tambah bahan</button>
         </div>
@@ -617,12 +655,51 @@ function Stage6({ st, ks, can, saveDet, saveK, d, id, reload }) {
 }
 
 /* ---------- Stage VII ---------- */
-function Stage7({ st, p, d, editor, saveDet, run, id, targetFc }) {
+function LaunchBoardCard({ p, id, editor, run }) {
+  const [cfg, setCfg] = useState(null)
+  useEffect(() => { api('/api/launchboard').then(setCfg).catch(() => {}) }, [])
+  const s = p.launchBoardSync
+  const sheetUrl = cfg ? `https://docs.google.com/spreadsheets/d/${cfg.sheetId}/edit` : null
+  return (
+    <Box title="Product Launch Board" right={s ? <Pill color={s.ok ? '#2F6B4A' : '#B8741A'}>{s.ok ? 'Tersinkron' : 'Gagal'}</Pill> : null}>
+      <div className="mb-2 text-xs text-char/70">Checklist hand-off dikirim ke tab Tasks di Google Sheet Product Launch Board (8 divisi), lengkap dengan fase, PIC, tanggal, dan status.</div>
+      {s && <div className="mb-2 text-xs">{s.ok ? `${s.rows} baris (${s.appended || 0} baru, ${s.updated || 0} diperbarui)` : s.reason} · {fmtWhen(s.at)}</div>}
+      {cfg && !cfg.configured && <div className="mb-2 rounded-lg bg-[#F5E6CC] p-2 text-xs">Belum terhubung: Admin perlu mengisi GOOGLE_SERVICE_ACCOUNT_JSON di Railway (lihat Panel Admin).</div>}
+      <div className="grid grid-cols-2 gap-2">
+        {editor && <button className="btn-p text-xs" disabled={cfg && !cfg.configured} onClick={() => run(() => api(`/api/projects/${id}/launchboard/sync`, { method: 'POST' }), 'Tersinkron ke Launch Board')}>Sinkron sekarang</button>}
+        {sheetUrl && <a className="btn-o text-xs" href={sheetUrl} target="_blank" rel="noreferrer">Buka Sheet ↗</a>}
+      </div>
+    </Box>
+  )
+}
+
+function Scorecard({ sc, det, can, saveDet }) {
+  const weeks = det.salesWeeks || ['', '', '', '']
+  const verdict = { hit: ['Hit', '#2F6B4A'], miss: ['Miss', '#B42F27'], berjalan: ['Berjalan', '#B8741A'], 'belum ada data': ['Belum ada data', '#8A8378'] }[sc?.verdict || 'belum ada data']
+  return (
+    <Box title="Scorecard setelah launch" right={<Pill color={verdict[1]}>{verdict[0]}</Pill>}>
+      <Field label="Target penjualan per minggu (porsi)"><Auto type="number" value={det.targetPorsiMinggu} disabled={!can} onSave={saveDet(7, 'targetPorsiMinggu')} placeholder="mis. 1.000" /></Field>
+      <div className="grid grid-cols-4 gap-2">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i}>
+            <Field label={`Minggu ${i + 1}`}><Auto type="number" value={weeks[i]} disabled={!can} onSave={(v) => { const n = [0, 1, 2, 3].map((j) => weeks[j] ?? null); n[i] = v; saveDet(7, 'salesWeeks')(n) }} placeholder="porsi" /></Field>
+            {sc?.weeklyPct?.[i] != null && <div className={`-mt-2 mb-2 text-center text-[11px] font-bold ${sc.weeklyPct[i] >= 100 ? 'text-hijau' : 'text-bata'}`}>{sc.weeklyPct[i]}%</div>}
+          </div>
+        ))}
+      </div>
+      {sc?.pct != null && <div className="mb-3 rounded-lg bg-tint2 p-2 text-sm">Achievement <b className={sc.pct >= 100 ? 'text-hijau' : 'text-bata'}>{sc.pct}%</b> · {fmtNum(sc.actual)} dari target {fmtNum(sc.targetTotal)} porsi ({sc.weeksFilled}/4 minggu)</div>}
+      <Field label="Feedback setelah launch"><Auto rows={2} value={det.postFeedback} disabled={!can} onSave={saveDet(7, 'postFeedback')} /></Field>
+      <Field label="Keputusan"><Sel value={det.postDecision || ''} disabled={!can} onSave={saveDet(7, 'postDecision')} options={[['', 'Belum'], ['lanjut', 'Lanjut'], ['evaluasi', 'Evaluasi'], ['stop', 'Stop']]} /></Field>
+      <div className="text-[10.5px] text-char/55">Hit = penjualan 4 minggu ≥ 100% target. Dipakai untuk hit rate per kategori di Beranda.</div>
+    </Box>
+  )
+}
+
+function Stage7({ st, p, d, editor, postEditor, saveDet, run, id, targetFc }) {
   const det = st.details || {}
   const fc = det.foodCostPct
   const items = p.handoff || []
   const upd = (i, patch) => { const n = items.map((x, j) => j === i ? { ...x, ...patch } : x); run(() => api(`/api/projects/${id}/handoff`, { method: 'PUT', body: { items: n } })) }
-  const weeks = det.salesWeeks || ['', '', '', '']
   return (
     <>
       <Box title="Data final">
@@ -653,13 +730,8 @@ function Stage7({ st, p, d, editor, saveDet, run, id, targetFc }) {
           </div>
         ))}
       </Box>
-      <Box title="Post-launch tracking">
-        <div className="grid grid-cols-4 gap-2">
-          {weeks.map((w, i) => <Field key={i} label={`Minggu ${i + 1}`}><Auto type="number" value={w} disabled={!editor} onSave={(v) => { const n = [...weeks]; n[i] = v; saveDet(7, 'salesWeeks')(n) }} placeholder="porsi" /></Field>)}
-        </div>
-        <Field label="Feedback setelah launch"><Auto rows={2} value={det.postFeedback} disabled={!editor} onSave={saveDet(7, 'postFeedback')} /></Field>
-        <Field label="Keputusan"><Sel value={det.postDecision || ''} disabled={!editor} onSave={saveDet(7, 'postDecision')} options={[['', 'Belum'], ['lanjut', 'Lanjut'], ['evaluasi', 'Evaluasi'], ['stop', 'Stop']]} /></Field>
-      </Box>
+      <LaunchBoardCard p={p} id={id} editor={postEditor} run={run} />
+      <Scorecard sc={d.scorecard} det={det} can={postEditor} saveDet={saveDet} />
     </>
   )
 }

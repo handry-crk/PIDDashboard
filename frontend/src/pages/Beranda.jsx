@@ -1,6 +1,6 @@
 import React from 'react'
 import { go } from '../App.jsx'
-import { Takeaway, Tiles, LaunchCalendar, PipelineByCategory, Funnel, SlaCompliance } from '../overview.jsx'
+import { Takeaway, Tiles, LaunchCalendar, PipelineByCategory, Funnel, SlaCompliance, LaunchScorecard } from '../overview.jsx'
 import { Title, useToast } from '../ui.jsx'
 import { api } from '../api.js'
 
@@ -33,6 +33,7 @@ export default function Beranda({ state, reload }) {
         </div>
         <div>
           <Funnel rows={state.funnel} />
+          <LaunchScorecard sc={state.scorecard} categories={c.categories} onOpen={(r) => go(`#/proyek/${r.id}`)} />
           <SlaCompliance rows={state.slaCompliance} byCat={state.slaComplianceByCat} categories={c.categories} order={c.categoryOrder} />
         </div>
       </div>

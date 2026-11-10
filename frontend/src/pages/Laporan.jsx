@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Takeaway, Tiles, LaunchCalendar, PipelineByCategory } from '../overview.jsx'
+import { Takeaway, Tiles, LaunchCalendar, PipelineByCategory, LaunchScorecard } from '../overview.jsx'
 import { Empty, Logo, Section, Sheet, Stepper, StatusPill, fmtTgl, fmtWhen, useToast, ROMAN } from '../ui.jsx'
 
 export default function Laporan() {
@@ -43,6 +43,7 @@ export default function Laporan() {
                   <span><b>{p.nama}</b><span className="text-char/60"> · {c.categories[p.category].label}</span></span><span className="text-xs">{fmtTgl(p.launchedAt)}</span>
                 </div>)) : <Empty>Belum ada produk launch tahun ini.</Empty>}
             </Section>
+            <LaunchScorecard sc={r.scorecard} categories={c.categories} />
             <Section title="Flow PID" sub="7 stage pengembangan produk (SO-PID-010)">
               <div className="card p-3">
                 {c.stages.map((s) => (

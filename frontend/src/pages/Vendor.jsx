@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { api, download } from '../api.js'
 import { go } from '../App.jsx'
-import { Empty, Field, Pill, Sheet, Title, useToast, fmtTgl, VSTATUS } from '../ui.jsx'
+import { Empty, Field, Pill, Sheet, Title, useToast, fmtTgl, fmtRp, VSTATUS } from '../ui.jsx'
 import { Attachments } from '../attachments.jsx'
 
 const VCOL = { prospek: '#8A8378', sampling: '#B8741A', approved: '#2F6B4A', blacklist: '#B42F27' }
@@ -9,6 +9,59 @@ const BLANK = { nama: '', kategoriBahan: 'Protein', produkBahan: [], kontakNama:
   termin: 'cash', sertifikatHalal: false, halalNomor: '', halalExpiry: '', statusVendor: 'prospek', rating: 3, catatan: '' }
 
 const wa = (hp) => `https://wa.me/${String(hp || '').replace(/^0/, '62').replace(/\D/g, '')}`
+
+function VendorPrices({ vendor, editor, onChange }) {
+  const toast = useToast()
+  const [data, setData] = useState(null)
+  const [f, setF] = useState({ bahan: '', unit: 'kg', harga: '', berlakuMulai: '', catatan: '' })
+  const [hist, setHist] = useState(false)
+  const load = () => api(`/api/vendors/${vendor.id}/prices`).then(setData).catch(() => {})
+  useEffect(() => { load() }, [vendor.id])
+  const add = async () => {
+    try {
+      const r = await api(`/api/vendors/${vendor.id}/prices`, { method: 'POST', body: { ...f, berlakuMulai: f.berlakuMulai || undefined } })
+      setData(r); setF({ ...f, harga: '', catatan: '', berlakuMulai: '' })
+      toast(r.terjadwal ? 'Harga terjadwal tersimpan' : r.kandidatUpdated ? `Harga tersimpan; HPP ${r.kandidatUpdated} kandidat diperbarui${r.alerts.length ? ' (ada food cost di atas target)' : ''}` : 'Harga tersimpan')
+      onChange && onChange()
+    } catch (e) { toast(e.message, 'err') }
+  }
+  const del = async (id) => { if (!confirm('Delete harga ini? BOM yang memakai harga ini akan kembali ke harga sebelumnya.')) return
+    try { setData(await api(`/api/prices/${id}`, { method: 'DELETE' })); onChange && onChange() } catch (e) { toast(e.message, 'err') } }
+  if (!data) return null
+  return (
+    <div className="mt-4">
+      <div className="mb-1 text-[13px] font-bold">Daftar harga bahan</div>
+      {data.current.length ? (
+        <div className="mb-2 overflow-hidden rounded-lg border border-line">
+          <table className="w-full text-[12px]"><thead className="bg-bata text-cream"><tr><th className="px-2 py-1.5 text-left">Bahan</th><th className="px-2 text-right">Harga</th><th className="px-2 text-right">Berlaku</th></tr></thead>
+            <tbody>{data.current.map((r) => <tr key={r.id} className="border-t border-line"><td className="px-2 py-1.5 font-semibold">{r.bahan}</td><td className="px-2 text-right">{fmtRp(r.harga)}/{r.unit}</td><td className="px-2 text-right">{fmtTgl(r.berlakuMulai)}</td></tr>)}</tbody></table>
+        </div>
+      ) : <div className="mb-2 text-xs text-char/60">Belum ada harga. Harga di sini otomatis dipakai BOM prototipe yang memilih vendor ini.</div>}
+      {data.history.some((r) => r.terjadwal) && <div className="mb-2 text-xs text-amber">Ada harga terjadwal: {data.history.filter((r) => r.terjadwal).map((r) => `${r.bahan} ${fmtRp(r.harga)} mulai ${fmtTgl(r.berlakuMulai)}`).join(', ')}</div>}
+      {data.history.length > 0 && <button className="mb-2 text-xs font-semibold text-bata underline" onClick={() => setHist(!hist)}>{hist ? 'Tutup riwayat harga' : `Riwayat harga (${data.history.length})`}</button>}
+      {hist && data.history.map((r) => (
+        <div key={r.id} className="flex items-center justify-between gap-2 border-b border-line py-1.5 text-[11.5px]">
+          <div><b>{r.bahan}</b> {fmtRp(r.harga)}/{r.unit} · mulai {fmtTgl(r.berlakuMulai)}{r.aktif ? <span className="ml-1 font-bold text-hijau">aktif</span> : r.terjadwal ? <span className="ml-1 font-bold text-amber">terjadwal</span> : ''}
+            <div className="text-char/55">{r.byName}{r.catatan ? ` · ${r.catatan}` : ''}</div></div>
+          {editor && <button className="h-8 w-8 text-bata" onClick={() => del(r.id)}>×</button>}
+        </div>
+      ))}
+      {editor && (
+        <div className="mt-2 rounded-lg border border-dashed border-line p-2">
+          <div className="grid grid-cols-2 gap-2">
+            <input className="inp col-span-2" placeholder="Nama bahan (sama dengan di BOM)" value={f.bahan} onChange={(e) => setF({ ...f, bahan: e.target.value })} list={`bahan-${vendor.id}`} />
+            <datalist id={`bahan-${vendor.id}`}>{data.current.map((r) => <option key={r.id} value={r.bahan} />)}</datalist>
+            <input className="inp" inputMode="decimal" placeholder="Harga (Rp)" value={f.harga} onChange={(e) => setF({ ...f, harga: e.target.value })} />
+            <select className="inp" value={f.unit} onChange={(e) => setF({ ...f, unit: e.target.value })}><option value="kg">per kg</option><option value="liter">per liter</option><option value="pcs">per pcs</option></select>
+            <Field label="Berlaku mulai (kosong = hari ini)"><input type="date" className="inp" value={f.berlakuMulai} onChange={(e) => setF({ ...f, berlakuMulai: e.target.value })} /></Field>
+            <Field label="Catatan"><input className="inp" value={f.catatan} onChange={(e) => setF({ ...f, catatan: e.target.value })} placeholder="mis. naik BBM" /></Field>
+          </div>
+          <button className="btn-o w-full" disabled={!f.bahan.trim() || !f.harga} onClick={add}>+ Simpan harga</button>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function Vendor({ state }) {
   const toast = useToast()
@@ -77,6 +130,7 @@ export default function Vendor({ state }) {
             ['Halal', view.sertifikatHalal ? `${view.halalNomor || 'Ya'} · exp ${fmtTgl(view.halalExpiry)}` : 'Tidak'], ['Catatan', view.catatan]].map(([l, v]) =>
             <div key={l} className="flex justify-between gap-3 border-b border-line py-2"><span className="text-char/60">{l}</span><span className="text-right font-semibold">{v || '-'}</span></div>)}
           {view.kontakHp && <div className="mt-3 grid grid-cols-2 gap-2"><a className="btn-o" href={`tel:${view.kontakHp}`}>Telepon</a><a className="btn-o" href={wa(view.kontakHp)} target="_blank" rel="noreferrer">WhatsApp</a></div>}
+          <VendorPrices vendor={view} editor={editor} onChange={async () => { const vs = await api('/api/vendors'); setList(vs); setView(vs.find((x) => x.id === view.id) || null) }} />
           <div className="mb-1 mt-4 text-[13px] font-bold">Lampiran (price list, sertifikat halal)</div>
           <Attachments files={view.files || []} params={{ vendorId: view.id, kind: 'vendor' }} can={editor} label="Lampiran vendor"
             onChange={async () => { const vs = await api('/api/vendors'); setList(vs); setView(vs.find((x) => x.id === view.id) || null) }} />

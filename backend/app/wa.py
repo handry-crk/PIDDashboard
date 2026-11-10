@@ -14,6 +14,7 @@ EVENTS = {
     "decisionResult": "Hasil keputusan Go/Revisi/Drop → PIC proyek",
     "blocked": "Proyek Blocked → PID Head",
     "surveyTarget": "Survey mencapai target responden → PIC proyek",
+    "foodCost": "Food cost naik di atas target karena harga vendor → PIC + PID Head",
     "nudge": "Pengingat harian 09:00 → PID Supervisor",
     "digest": "Daily digest 17:00 → PID Head",
     "weekly": "Weekly Update → grup WhatsApp",
