@@ -136,6 +136,29 @@ def test_launchboard_sync(c, monkeypatch):
     assert r.status_code == 400 and "permission" in r.json()["detail"]
 
 
+def test_launchboard_appsscript(c, monkeypatch):
+    th = c.post("/api/auth/admin-login", json={"pin": "1234"}).json()["token"]
+    monkeypatch.delenv("GOOGLE_SERVICE_ACCOUNT_JSON", raising=False)
+    got = []
+
+    def fake_webhook(payload):
+        got.append(payload)
+        if payload.get("action") == "test":
+            return {"ok": True, "sheet": "CRK Product Launch Tracker"}
+        return {"ok": True, "updated": 0, "appended": len(payload["rows"])}
+    monkeypatch.setattr(LB, "_webhook", fake_webhook)
+    assert c.put("/api/settings", headers=H(th), json={"launchWebhookUrl": "https://evil.example.com/x"}).status_code == 400
+    c.put("/api/settings", headers=H(th), json={"launchWebhookUrl": "https://script.google.com/macros/s/ABC/exec"})
+    st = c.get("/api/launchboard", headers=H(th)).json()
+    assert st["mode"] == "appsscript" and st["configured"] and len(st["webhookSecret"]) > 10
+    assert st["webhookSecret"] not in str(c.get("/api/state", headers=H(th)).json())
+    assert c.post("/api/launchboard/test", headers=H(th)).json()["sheet"] == "CRK Product Launch Tracker"
+    p = next(x for x in c.get("/api/state", headers=H(th)).json()["projects"] if x["nama"] == "Isian Jun")
+    d = c.post(f"/api/projects/{p['id']}/launchboard/sync", headers=H(th)).json()
+    assert d["project"]["launchBoardSync"]["ok"] and got[-1]["rows"][0][0] == "PID-VC-2706-01"
+    c.put("/api/settings", headers=H(th), json={"launchWebhookUrl": ""})
+
+
 def test_scorecard(c):
     th = c.post("/api/auth/admin-login", json={"pin": "1234"}).json()["token"]
     st = c.get("/api/state", headers=H(th)).json()

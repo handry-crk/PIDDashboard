@@ -26,6 +26,7 @@ def public_settings(s):
     s = dict(s)
     s.pop("adminPinHash", None)
     s["waHasToken"] = bool(s.pop("waToken", None))
+    s.pop("launchWebhookSecret", None)
     return s
 
 

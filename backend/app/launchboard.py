@@ -1,6 +1,7 @@
 """Push hand-off items of a project to the CRK Product Launch Tracker Google Sheet (tab Tasks, A:K)."""
 import json
 import os
+import secrets
 import threading
 
 from . import domain as D, services as S
@@ -41,11 +42,38 @@ def sa_info():
         return None
 
 
-def lb_settings():
+def webhook_secret():
+    db = get_db()
+    s = db.settings.find_one({"id": "settings"}) or {}
+    if not s.get("launchWebhookSecret"):
+        db.settings.update_one({"id": "settings"}, {"$set": {"launchWebhookSecret": secrets.token_urlsafe(18)}})
+        s = db.settings.find_one({"id": "settings"})
+    return s["launchWebhookSecret"]
+
+
+def lb_settings(include_secret=False):
     s = get_db().settings.find_one({"id": "settings"}) or {}
     info = sa_info()
-    return {"sheetId": s.get("launchSheetId") or DEFAULT_SHEET_ID, "auto": s.get("launchBoardAuto", True),
-            "configured": bool(info), "serviceEmail": (info or {}).get("client_email")}
+    url = s.get("launchWebhookUrl") or ""
+    mode = "appsscript" if url else ("service_account" if info else None)
+    out = {"sheetId": s.get("launchSheetId") or DEFAULT_SHEET_ID, "auto": s.get("launchBoardAuto", True),
+           "configured": bool(mode), "mode": mode, "serviceEmail": (info or {}).get("client_email"),
+           "webhookUrl": url}
+    if include_secret:
+        out["webhookSecret"] = webhook_secret()
+    return out
+
+
+def _webhook(payload):  # replaced in tests
+    import httpx
+    r = httpx.post(lb_settings()["webhookUrl"], json={"secret": webhook_secret(), **payload}, timeout=40, follow_redirects=True)
+    try:
+        body = r.json()
+    except Exception:
+        raise RuntimeError("Apps Script tidak membalas JSON. Pastikan deploy sebagai Web app dengan akses 'Anyone'")
+    if not body.get("ok"):
+        raise RuntimeError(body.get("error") or "Apps Script menolak permintaan")
+    return body
 
 
 def _token():
@@ -101,13 +129,20 @@ def sync(pid, by=None):
     if not p:
         return None
     if not cfg["configured"]:
-        status["reason"] = "GOOGLE_SERVICE_ACCOUNT_JSON belum diisi di Railway"
+        status["reason"] = "Launch Board belum terhubung (isi URL Apps Script di Panel Admin)"
     else:
         try:
             settings = S.get_settings()
             p["flags"] = D.compute_project_flags(p, settings, p.get("lastActivityAt"))
             members = list(db.members.find({}, {"id": 1, "name": 1}))
             rows = build_rows(p, members)
+            if cfg["mode"] == "appsscript":
+                res = _webhook({"rows": rows})
+                status.update(ok=True, rows=len(rows), updated=res.get("updated", 0), appended=res.get("appended", 0))
+                db.projects.update_one({"id": pid}, {"$set": {"launchBoardSync": status}})
+                if by is not None:
+                    S.log_activity(pid, by, "launchboard", note=f"Sinkron Launch Board: {len(rows)} baris")
+                return status
             col = _call("GET", f"{API}/{cfg['sheetId']}/values/Tasks!A:A").get("values", [])
             index = {r[0]: i + 1 for i, r in enumerate(col) if r}
             updates, appends = [], []
@@ -146,7 +181,10 @@ def sync_async(pid):
 def test_connection():
     cfg = lb_settings()
     if not cfg["configured"]:
-        raise RuntimeError("GOOGLE_SERVICE_ACCOUNT_JSON belum diisi di Railway")
+        raise RuntimeError("Isi URL Apps Script di Panel Admin terlebih dahulu")
+    if cfg["mode"] == "appsscript":
+        res = _webhook({"action": "test"})
+        return {"ok": True, "mode": "appsscript", "sheet": res.get("sheet")}
     head = _call("GET", f"{API}/{cfg['sheetId']}/values/Tasks!A1:K1").get("values", [[]])[0]
     expected = ["ID", "Fase", "Divisi", "Task", "Deliverable", "PIC", "Mulai", "Selesai", "Status", "Progres (%)", "Catatan / Blocker"]
     if head != expected:

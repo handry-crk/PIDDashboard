@@ -1011,6 +1011,11 @@ def update_settings(body: dict = Body(...), me=Depends(current_member)):
     allowed = {"appName", "slaDays", "cadence", "launchTargetPerYear", "screeningCriteria", "screeningPassScore",
                "targetFoodCostPct", "slotStart", "digestTime", "nudgeTime", "weeklyDay", "weeklyTime", "workDays", "adminEmail", "stalledDays"}
     upd = {k: v for k, v in body.items() if k in allowed}
+    if "launchWebhookUrl" in body:
+        url = str(body["launchWebhookUrl"] or "").strip()
+        if url and not url.startswith("https://script.google.com/"):
+            raise HTTPException(400, "URL harus URL Web app Apps Script (https://script.google.com/macros/s/.../exec)")
+        upd["launchWebhookUrl"] = url
     for k in ("waEnabled", "waGroup", "waEvents", "launchSheetId", "launchBoardAuto"):
         if k in body:
             upd[k] = body[k]
@@ -1155,7 +1160,14 @@ def wa_test(body: dict = Body(default={}), me=Depends(current_member)):
 # ======================= Product Launch Board =======================
 @app.get("/api/launchboard")
 def launchboard_status(me=Depends(current_member)):
-    return LB.lb_settings()
+    return LB.lb_settings(include_secret=is_head(me))
+
+
+@app.get("/api/launchboard/script", response_class=PlainTextResponse)
+def launchboard_script(me=Depends(current_member)):
+    require(is_head(me), "Hanya PID Head / Admin")
+    path = os.path.join(os.path.dirname(__file__), "launch-board-apps-script.gs")
+    return open(path).read().replace("TEMPEL_KODE_RAHASIA_DI_SINI", LB.webhook_secret())
 
 
 @app.post("/api/launchboard/test")

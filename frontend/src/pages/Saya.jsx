@@ -301,32 +301,32 @@ function WhatsApp({ members, me }) {
 function LaunchBoardSettings() {
   const toast = useToast()
   const [c, setC] = useState(null)
-  const [sheet, setSheet] = useState('')
-  const load = () => api('/api/launchboard').then((r) => { setC(r); setSheet(r.sheetId) }).catch(() => {})
+  const [url, setUrl] = useState('')
+  const load = () => api('/api/launchboard').then((r) => { setC(r); setUrl(r.webhookUrl || '') }).catch(() => {})
   useEffect(() => { load() }, [])
   if (!c) return null
-  const save = (patch) => api('/api/settings', { method: 'PUT', body: patch }).then(() => { toast('Tersimpan'); load() }).catch((e) => toast(e.message, 'err'))
-  const copy = (t) => navigator.clipboard.writeText(t).then(() => toast('Tersalin')).catch(() => {})
+  const save = (patch, msg = 'Tersimpan') => api('/api/settings', { method: 'PUT', body: patch }).then(() => { toast(msg); load() }).catch((e) => toast(e.message, 'err'))
+  const copyScript = async () => {
+    try { const t = await api('/api/launchboard/script'); await navigator.clipboard.writeText(t); toast('Kode Apps Script tersalin') } catch (e) { toast(e.message || 'Copy gagal', 'err') }
+  }
+  const sheetUrl = `https://docs.google.com/spreadsheets/d/${c.sheetId}/edit`
+  const Step = ({ n, children }) => <div className="mb-2 flex gap-2 text-[13px]"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-bata text-[11px] font-bold text-cream">{n}</span><div className="flex-1">{children}</div></div>
   return (
     <Section title="Product Launch Board" sub="Sinkron hand-off stage VII ke Google Sheet">
-      <div className="card p-3 text-sm">
-        <div className={`mb-3 rounded-lg p-2 text-xs ${c.configured ? 'bg-[#DCEADF]' : 'bg-[#F5E6CC]'}`}>
-          {c.configured ? <>Service account aktif: <b className="break-all">{c.serviceEmail}</b> <button className="ml-1 font-semibold text-bata underline" onClick={() => copy(c.serviceEmail)}>Copy</button></>
-            : <>Belum terhubung. Buat service account di Google Cloud (aktifkan Google Sheets API), download key JSON, lalu tempel seluruh isinya ke variable <b>GOOGLE_SERVICE_ACCOUNT_JSON</b> di Railway.</>}
-        </div>
-        {c.configured && <div className="mb-3 text-xs text-char/70">Share Google Sheet Product Launch Board ke email service account di atas sebagai <b>Editor</b>.</div>}
-        <Field label="Spreadsheet ID">
-          <div className="grid grid-cols-[1fr_auto] gap-2"><input className="inp" value={sheet} onChange={(e) => setSheet(e.target.value.trim())} />
-            <button className="btn-o px-3" onClick={() => save({ launchSheetId: sheet })}>Simpan</button></div>
-        </Field>
-        <label className="mb-3 flex min-h-[40px] items-center justify-between gap-3 border-b border-line text-[13px]">
-          <span>Sinkron otomatis (masuk stage VII, update checklist, launch)</span>
+      <div className="card p-3">
+        <div className={`mb-3 rounded-lg p-2 text-xs ${c.configured ? 'bg-[#DCEADF]' : 'bg-[#F5E6CC]'}`}>{c.configured ? `Terhubung (${c.mode === 'appsscript' ? 'Apps Script' : 'service account'})` : 'Belum terhubung. Cukup akun Google, tanpa Google Cloud.'}</div>
+        <Step n={1}><button className="font-semibold text-bata underline" onClick={copyScript}>Copy kode Apps Script</button></Step>
+        <Step n={2}><a className="font-semibold text-bata underline" href={sheetUrl} target="_blank" rel="noreferrer">Buka Sheet</a> → Extensions → Apps Script → hapus isi → tempel → Save.</Step>
+        <Step n={3}>Deploy → New deployment → Web app. Execute as: <b>Me</b>. Who has access: <b>Anyone</b>. Deploy → izinkan akses → copy URL.</Step>
+        <Step n={4}>
+          <div className="grid grid-cols-[1fr_auto] gap-2"><input className="inp" value={url} onChange={(e) => setUrl(e.target.value.trim())} placeholder="https://script.google.com/macros/s/.../exec" />
+            <button className="btn-p px-3" onClick={() => save({ launchWebhookUrl: url }, 'URL tersimpan')}>Simpan</button></div>
+        </Step>
+        <Step n={5}><button className="font-semibold text-bata underline" disabled={!c.configured} onClick={() => api('/api/launchboard/test', { method: 'POST' }).then(() => toast('Terhubung ke Sheet, header tab Tasks sesuai')).catch((e) => toast(e.message, 'err'))}>Tes koneksi</button></Step>
+        <label className="mt-2 flex min-h-[40px] items-center justify-between gap-3 border-t border-line pt-2 text-[13px]">
+          <span>Sinkron otomatis</span>
           <input type="checkbox" className="h-5 w-5 accent-bata" checked={!!c.auto} onChange={(e) => save({ launchBoardAuto: e.target.checked })} />
         </label>
-        <div className="grid grid-cols-2 gap-2">
-          <button className="btn-p text-xs" disabled={!c.configured} onClick={() => api('/api/launchboard/test', { method: 'POST' }).then(() => toast('Koneksi ke Sheet berhasil, header tab Tasks sesuai')).catch((e) => toast(e.message, 'err'))}>Tes koneksi</button>
-          <a className="btn-o text-xs" href={`https://docs.google.com/spreadsheets/d/${c.sheetId}/edit`} target="_blank" rel="noreferrer">Buka Sheet ↗</a>
-        </div>
       </div>
     </Section>
   )

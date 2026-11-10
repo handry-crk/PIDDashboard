@@ -664,7 +664,7 @@ function LaunchBoardCard({ p, id, editor, run }) {
     <Box title="Product Launch Board" right={s ? <Pill color={s.ok ? '#2F6B4A' : '#B8741A'}>{s.ok ? 'Tersinkron' : 'Gagal'}</Pill> : null}>
       <div className="mb-2 text-xs text-char/70">Checklist hand-off dikirim ke tab Tasks di Google Sheet Product Launch Board (8 divisi), lengkap dengan fase, PIC, tanggal, dan status.</div>
       {s && <div className="mb-2 text-xs">{s.ok ? `${s.rows} baris (${s.appended || 0} baru, ${s.updated || 0} diperbarui)` : s.reason} · {fmtWhen(s.at)}</div>}
-      {cfg && !cfg.configured && <div className="mb-2 rounded-lg bg-[#F5E6CC] p-2 text-xs">Belum terhubung: Admin perlu mengisi GOOGLE_SERVICE_ACCOUNT_JSON di Railway (lihat Panel Admin).</div>}
+      {cfg && !cfg.configured && <div className="mb-2 rounded-lg bg-[#F5E6CC] p-2 text-xs">Belum terhubung. Admin perlu memasang Apps Script di Sheet (Saya → Panel Admin → Product Launch Board).</div>}
       <div className="grid grid-cols-2 gap-2">
         {editor && <button className="btn-p text-xs" disabled={cfg && !cfg.configured} onClick={() => run(() => api(`/api/projects/${id}/launchboard/sync`, { method: 'POST' }), 'Tersinkron ke Launch Board')}>Sinkron sekarang</button>}
         {sheetUrl && <a className="btn-o text-xs" href={sheetUrl} target="_blank" rel="noreferrer">Buka Sheet ↗</a>}

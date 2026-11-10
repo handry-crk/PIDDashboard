@@ -73,10 +73,13 @@ User pertama = Admin. Admin PIN fallback default `1234` (ubah di Panel Admin).
 Tiap event bisa dimatikan; semua pengiriman tercatat di log Panel Admin. Token tidak pernah dikirim ke browser.
 
 ## Sinkron ke Product Launch Board (Google Sheet)
-1. Google Cloud Console → buat project → aktifkan **Google Sheets API** → buat **Service Account** → Keys → Add key → JSON.
-2. Railway → Variables → `GOOGLE_SERVICE_ACCOUNT_JSON` = seluruh isi file JSON tersebut.
-3. Share Google Sheet **CRK Product Launch Tracker** ke email service account (terlihat di Panel Admin) sebagai **Editor**.
-4. Panel Admin → Product Launch Board → **Tes koneksi**.
+Tanpa Google Cloud, cukup akun Google pemilik Sheet:
+1. Panel Admin → Product Launch Board → **Copy kode Apps Script** (kode rahasia sudah terisi).
+2. Buka Sheet → Extensions → Apps Script → tempel → Save.
+3. Deploy → New deployment → Web app → Execute as: Me, Who has access: Anyone → copy URL.
+4. Tempel URL di Panel Admin → Simpan → **Tes koneksi**.
+
+(Alternatif bila nanti memakai Google Cloud: isi `GOOGLE_SERVICE_ACCOUNT_JSON`; kode script ada di `integrations/launch-board-apps-script.gs`.)
 
 Saat proyek masuk stage VII, checklist hand-off dikirim ke tab **Tasks** (ID `PID-<kode>` untuk PID dan `<KODE DIVISI>-<kode>-<ITEM>` untuk tiap divisi, mis. `MKT-VC-2702-01-LISTING`). Baris yang sudah ada diperbarui (tidak dobel); baris lain di sheet tidak disentuh. Sinkron otomatis saat checklist berubah dan saat launch, atau manual lewat tombol **Sinkron sekarang**.
 
