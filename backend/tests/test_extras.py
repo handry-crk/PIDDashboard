@@ -212,3 +212,22 @@ def test_s3_storage(c, monkeypatch):
         keys = [o["Key"] for o in boto3.client("s3", region_name="us-east-1").list_objects_v2(Bucket="crk-pid").get("Contents", [])]
         assert f"uploads/{f['id']}.pdf" not in keys
     ST.reset()
+
+
+def test_reset_data(c):
+    th = c.post("/api/auth/admin-login", json={"pin": "1234"}).json()["token"]
+    st = c.get("/api/state", headers=H(th)).json()
+    assert st["projects"] and c.get("/api/vendors", headers=H(th)).json()
+    sup = c.post("/api/auth/register", json={"name": "Sinta", "role": "pid_supervisor", "pin": "2222"}).json()["token"]
+    assert c.post("/api/admin/reset", headers=H(sup), json={"scope": "proyek", "confirm": "RESET", "pin": "2222"}).status_code == 403
+    assert c.post("/api/admin/reset", headers=H(th), json={"scope": "proyek", "confirm": "hapus", "pin": "1111"}).status_code == 400
+    assert c.post("/api/admin/reset", headers=H(th), json={"scope": "proyek", "confirm": "RESET", "pin": "9999"}).status_code == 401
+    r = c.post("/api/admin/reset", headers=H(th), json={"scope": "proyek", "confirm": "reset", "pin": "1111"}).json()
+    assert r["ok"] and r["backup"].startswith("pid-backup-") and r["deleted"]["projects"] >= 1
+    st = c.get("/api/state", headers=H(th)).json()
+    assert st["projects"] == [] and st["slots"] and all(s["projectId"] is None for s in st["slots"])
+    assert c.get("/api/vendors", headers=H(th)).json()  # vendors kept
+    assert any(m["name"] == "Sinta" for m in st["members"])  # members kept
+    assert c.post("/api/seed/whiteboard", headers=H(th)).status_code == 200  # can re-import
+    r = c.post("/api/admin/reset", headers=H(th), json={"scope": "semua", "confirm": "RESET", "pin": "1111"}).json()
+    assert r["ok"] and c.get("/api/vendors", headers=H(th)).json() == []

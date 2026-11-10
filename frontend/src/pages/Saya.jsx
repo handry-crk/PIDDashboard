@@ -213,6 +213,7 @@ function Admin({ state, reload }) {
       <WhatsApp members={state.members} me={me} />
       <LaunchBoardSettings />
       {me.isAdmin && <AdminPin />}
+      {me.isAdmin && <ResetData reload={reload} />}
 
       <Sheet open={!!pinFor} onClose={() => setPinFor(null)} title={`Reset PIN · ${pinFor?.name}`} footer={<button className="btn-p w-full" disabled={!/^\d{4,6}$/.test(pin)}
         onClick={() => api(`/api/members/${pinFor.id}/reset-pin`, { method: 'POST', body: { pin } }).then(() => { toast('PIN direset & akun dibuka'); setPinFor(null) }).catch((e) => toast(e.message, 'err'))}>Reset PIN</button>}>
@@ -328,6 +329,42 @@ function LaunchBoardSettings() {
           <input type="checkbox" className="h-5 w-5 accent-bata" checked={!!c.auto} onChange={(e) => save({ launchBoardAuto: e.target.checked })} />
         </label>
       </div>
+    </Section>
+  )
+}
+
+function ResetData({ reload }) {
+  const toast = useToast()
+  const [open, setOpen] = useState(false)
+  const [f, setF] = useState({ scope: 'proyek', confirm: '', pin: '' })
+  const [busy, setBusy] = useState(false)
+  const run = async () => {
+    setBusy(true)
+    try {
+      const r = await api('/api/admin/reset', { method: 'POST', body: f })
+      toast(`Data direset. Backup tersimpan: ${r.backup}`); setOpen(false); setF({ scope: 'proyek', confirm: '', pin: '' }); reload(); go('#/beranda')
+    } catch (e) { toast(e.message, 'err') } finally { setBusy(false) }
+  }
+  return (
+    <Section title="Reset Data" sub="Hapus data uji coba sebelum dipakai resmi">
+      <div className="card border-bata p-3">
+        <div className="mb-3 text-xs text-char/75">Member, PIN, dan Settings (SLA, cadence, WhatsApp, Launch Board) tidak ikut terhapus. Backup otomatis dibuat sebelum reset.</div>
+        <button className="btn-o w-full" onClick={() => setOpen(true)}>Reset data…</button>
+      </div>
+      <Sheet open={open} onClose={() => setOpen(false)} title="Reset data"
+        footer={<button className="btn-p w-full" disabled={busy || f.confirm.trim().toUpperCase() !== 'RESET' || !/^\d{4,6}$/.test(f.pin)} onClick={run}>{busy ? 'Mereset…' : 'Hapus permanen'}</button>}>
+        <div className="mb-3 grid gap-2">
+          {[['proyek', 'Proyek saja', 'Hapus semua proyek, kandidat, BOM, survey, komentar, lampiran proyek. Vendor & daftar harga tetap.'],
+            ['semua', 'Proyek + vendor', 'Seperti di atas, ditambah semua vendor, riwayat harga, lampiran vendor, dan log WhatsApp.']].map(([k, l, d]) => (
+            <button key={k} onClick={() => setF({ ...f, scope: k })} className={`rounded-lg border-2 p-3 text-left ${f.scope === k ? 'border-bata bg-tint2' : 'border-line'}`}>
+              <div className="text-sm font-bold">{l}</div><div className="text-xs text-char/70">{d}</div>
+            </button>
+          ))}
+        </div>
+        <div className="mb-3 rounded-lg bg-[#F5E6CC] p-2 text-xs">Tindakan ini tidak bisa dibatalkan dari dashboard. Data hanya bisa dikembalikan dari file backup.</div>
+        <Field label="Ketik RESET"><input className="inp" value={f.confirm} onChange={(e) => setF({ ...f, confirm: e.target.value })} autoCapitalize="characters" /></Field>
+        <Field label="PIN Anda"><input className="inp tracking-[6px]" type="password" inputMode="numeric" maxLength={6} value={f.pin} onChange={(e) => setF({ ...f, pin: e.target.value.replace(/\D/g, '') })} /></Field>
+      </Sheet>
     </Section>
   )
 }

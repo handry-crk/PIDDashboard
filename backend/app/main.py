@@ -1236,6 +1236,48 @@ def delete_vendor_price(prid: str, me=Depends(current_member)):
     return PR.price_list(r["vendorId"])
 
 
+# ======================= reset data =======================
+@app.post("/api/admin/reset")
+def reset_data(body: dict = Body(...), me=Depends(current_member)):
+    require(me.get("isAdmin"), "Hanya Admin yang dapat reset data")
+    scope = body.get("scope")
+    if scope not in ("proyek", "semua"):
+        raise HTTPException(400, "Pilih jenis reset")
+    if (body.get("confirm") or "").strip().upper() != "RESET":
+        raise HTTPException(400, "Ketik RESET untuk konfirmasi")
+    db = get_db()
+    m = db.members.find_one({"id": me["id"]})
+    pin = str(body.get("pin", ""))
+    s = S.get_settings()
+    admin_ok = verify_pin(pin, s["adminPinHash"]) if s.get("adminPinHash") else pin == config.DEFAULT_ADMIN_PIN
+    if not (verify_pin(pin, m["pinHash"]) or admin_ok):
+        raise HTTPException(401, "PIN salah")
+    backup = J.job_backup(force=True)
+    counts = {}
+    proj_cols = ["projects", "kandidat", "bom", "activity", "comments", "surveys", "responses"]
+    for c in proj_cols:
+        counts[c] = db[c].count_documents({})
+        db[c].delete_many({})
+    file_q = {"$or": [{"projectId": {"$ne": None}}, {"kandidatId": {"$ne": None}}]}
+    if scope == "semua":
+        for c in ("vendors", "vendorPrices", "walog"):
+            counts[c] = db[c].count_documents({})
+            db[c].delete_many({})
+        file_q = {}
+    files = clean_all(db.files.find(file_q))
+    for f in files:
+        ST.delete(f)
+    db.files.delete_many(file_q)
+    counts["files"] = len(files)
+    db.slots.delete_many({})
+    db.settings.update_one({"id": "settings"}, {"$set": {"lastWeeklyText": "", "lastWeeklyAt": None, "slotStart": {}, "suppressedSlots": []}})
+    S.ensure_slots(force=True)
+    log_line = f"Reset data ({scope}) oleh {me['name']}; backup {backup.get('file')}"
+    logging.getLogger("pid").warning(log_line)
+    db.reminderlog.insert_one({"date": D.fdate(D.today()), "slot": "reset", "sentAt": D.now_utc_iso(), "recipients": [], "result": {"scope": scope, "by": me["name"], "backup": backup.get("file"), "counts": counts}})
+    return {"ok": True, "scope": scope, "backup": backup.get("file"), "deleted": counts}
+
+
 # ======================= static frontend =======================
 static_dir = os.path.abspath(config.STATIC_DIR)
 if os.path.isdir(static_dir):
