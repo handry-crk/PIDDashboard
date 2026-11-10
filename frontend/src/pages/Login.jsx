@@ -10,10 +10,15 @@ export default function Login({ onLogin }) {
   const [f, setF] = useState({ memberId: '', pin: '', name: '', role: 'pid_supervisor', email: '', phone: '' })
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
+  const [avail, setAvail] = useState(null)
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value })
 
   useEffect(() => {
     api('/api/auth/members').then((m) => { setMembers(m); if (!m.length) setMode('register') }).catch(() => {})
+    api('/api/auth/roles').then((r) => {
+      setAvail(r.roles)
+      setF((o) => (r.roles[o.role]?.available ? o : { ...o, role: Object.keys(r.roles).find((k) => r.roles[k].available) || 'viewer' }))
+    }).catch(() => {})
   }, [])
 
   const submit = async (e) => {
@@ -54,7 +59,11 @@ export default function Login({ onLogin }) {
             {!members.length && <div className="mb-3 rounded-lg bg-tint2 p-3 text-xs">User pertama otomatis menjadi <b>Admin</b>. Disarankan PID Head mendaftar lebih dulu.</div>}
             <Field label="Nama"><input className="inp" value={f.name} onChange={set('name')} required minLength={2} /></Field>
             <Field label="Role">
-              <select className="inp" value={f.role} onChange={set('role')}>{Object.entries(ROLES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+              <select className="inp" value={f.role} onChange={set('role')}>{Object.entries(ROLES).map(([k, v]) => {
+                const a = avail?.[k]
+                const taken = a && !a.available
+                return <option key={k} value={k} disabled={taken}>{v}{taken ? (a.holder ? ` — sudah: ${a.holder}` : ' — ditetapkan Admin') : ''}</option>
+              })}</select>
             </Field>
             <Field label="Email"><input className="inp" type="email" value={f.email} onChange={set('email')} placeholder="nama@crk.co.id" /></Field>
             <Field label="WhatsApp"><input className="inp" inputMode="numeric" value={f.phone} onChange={set('phone')} placeholder="08…" /></Field>

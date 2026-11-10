@@ -207,7 +207,7 @@ def test_regressions(c):
     th = c.post("/api/auth/admin-login", json={"pin": "1234"}).json()["token"]
     # only the first user may self-register as PID Head
     r = c.post("/api/auth/register", json={"name": "Orang Luar", "role": "pid_head", "pin": "1111"})
-    assert r.status_code == 403
+    assert r.status_code == 409 and "Handry" in r.json()["detail"]
     st = c.get("/api/state", headers=H(th)).json()
     vc = next(p for p in st["projects"] if p["kode"] == "VC-2702-01")
     # planned override (whiteboard 9-23 Nov) is the deadline, not start+SLA

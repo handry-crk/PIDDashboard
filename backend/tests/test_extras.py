@@ -231,3 +231,26 @@ def test_reset_data(c):
     assert c.post("/api/seed/whiteboard", headers=H(th)).status_code == 200  # can re-import
     r = c.post("/api/admin/reset", headers=H(th), json={"scope": "semua", "confirm": "RESET", "pin": "1111"}).json()
     assert r["ok"] and c.get("/api/vendors", headers=H(th)).json() == []
+
+
+def test_single_head_and_supervisor(c):
+    th = c.post("/api/auth/admin-login", json={"pin": "1234"}).json()["token"]
+    roles = c.get("/api/auth/roles").json()["roles"]
+    assert roles["pid_head"]["available"] is False and roles["pid_supervisor"]["holder"] == "Sinta"
+    # second supervisor cannot self-register
+    r = c.post("/api/auth/register", json={"name": "Budi", "role": "pid_supervisor", "pin": "3333"})
+    assert r.status_code == 409 and "Sinta" in r.json()["detail"]
+    budi = c.post("/api/auth/register", json={"name": "Budi", "role": "pid_staff", "pin": "3333"}).json()["member"]
+    # admin cannot promote Budi while Sinta is active supervisor
+    r = c.put(f"/api/members/{budi['id']}", headers=H(th), json={"role": "pid_supervisor"})
+    assert r.status_code == 409
+    assert c.put(f"/api/members/{budi['id']}", headers=H(th), json={"role": "pid_head"}).status_code == 409
+    # hand over: deactivate Sinta, then promote Budi; Sinta cannot be reactivated as supervisor
+    sinta = next(m for m in c.get("/api/state", headers=H(th)).json()["members"] if m["name"] == "Sinta")
+    assert c.put(f"/api/members/{sinta['id']}", headers=H(th), json={"active": False}).status_code == 200
+    assert c.put(f"/api/members/{budi['id']}", headers=H(th), json={"role": "pid_supervisor"}).status_code == 200
+    assert c.put(f"/api/members/{sinta['id']}", headers=H(th), json={"active": True}).status_code == 409
+    assert c.put(f"/api/members/{sinta['id']}", headers=H(th), json={"role": "pid_staff", "active": True}).status_code == 200
+    # unchanged role edits (e.g. phone) still fine for the holder
+    assert c.put(f"/api/members/{budi['id']}", headers=H(th), json={"phone": "081299990000"}).status_code == 200
+    assert c.get("/api/auth/roles").json()["roles"]["pid_supervisor"]["holder"] == "Budi"

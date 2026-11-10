@@ -202,10 +202,34 @@ def health():
     return {"ok": True, "db": ping(), "time": D.now_utc_iso()}
 
 
+SINGLE_ROLES = {"pid_head": "PID Head", "pid_supervisor": "PID Supervisor"}
+
+
+def _role_holder(role, exclude_id=None):
+    """Active member already holding a single-seat role (PID Head / PID Supervisor)."""
+    if role not in SINGLE_ROLES:
+        return None
+    q = {"role": role, "active": True}
+    for m in get_db().members.find(q):
+        if m["id"] != exclude_id:
+            return clean(m)
+    return None
+
+
 @app.get("/api/auth/members")
 def login_members():
     ms = clean_all(get_db().members.find({"active": True}))
     return [{"id": m["id"], "name": m["name"], "role": m["role"]} for m in sorted(ms, key=lambda m: m["name"].lower())]
+
+
+@app.get("/api/auth/roles")
+def role_availability():
+    first = get_db().members.count_documents({}) == 0
+    out = {}
+    for r in D.ROLES:
+        h = _role_holder(r)
+        out[r] = {"available": not h and (first or r != "pid_head"), "holder": h["name"] if h else None}
+    return {"first": first, "roles": out}
 
 
 class RegisterIn(BaseModel):
@@ -230,6 +254,9 @@ def register(body: RegisterIn):
     if db.members.find_one({"name": {"$regex": f"^{re.escape(body.name.strip())}$", "$options": "i"}}):
         raise HTTPException(409, "Nama sudah terdaftar. Pilih nama Anda di halaman login")
     first = db.members.count_documents({}) == 0
+    holder = _role_holder(body.role)
+    if holder:
+        raise HTTPException(409, f"Role {SINGLE_ROLES[body.role]} sudah dipegang {holder['name']}. Hanya boleh 1 {SINGLE_ROLES[body.role]}; pilih role lain atau minta Admin memindahkan role")
     if body.role == "pid_head" and not first:
         raise HTTPException(403, "Role PID Head hanya bisa diberikan Admin. Daftar dengan role lain, lalu minta Admin mengubah role Anda")
     m = {"id": D.new_id(), "name": body.name.strip(), "role": body.role, "email": body.email.strip(), "phone": body.phone.strip(),
@@ -1066,6 +1093,15 @@ def update_member(mid: str, body: dict = Body(...), me=Depends(current_member)):
     upd = {k: body[k] for k in ("role", "active", "isAdmin", "email", "phone", "name") if k in body}
     if "role" in upd and upd["role"] not in D.ROLES:
         raise HTTPException(400, "Role tidak valid")
+    target = get_db().members.find_one({"id": mid})
+    if not target:
+        raise HTTPException(404, "Member tidak ditemukan")
+    new_role = upd.get("role", target["role"])
+    becomes_active = upd.get("active", target.get("active", True))
+    if becomes_active and (new_role != target["role"] or (upd.get("active") is True and not target.get("active", True))):
+        holder = _role_holder(new_role, exclude_id=mid)
+        if holder:
+            raise HTTPException(409, f"Role {SINGLE_ROLES[new_role]} sudah dipegang {holder['name']}. Ubah role {holder['name']} atau nonaktifkan dulu, lalu coba lagi")
     if upd.get("active") is False or upd.get("isAdmin") is False:
         target = get_db().members.find_one({"id": mid})
         admins = get_db().members.count_documents({"isAdmin": True, "active": True})

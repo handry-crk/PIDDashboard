@@ -116,7 +116,7 @@ function Admin({ state, reload }) {
         </div>
       </Section>
 
-      <Section title="Member" sub="Role, status aktif, reset PIN">
+      <Section title="Member" sub="Role, status aktif, reset PIN · PID Head & PID Supervisor masing-masing 1 orang">
         {state.members.map((m) => (
           <div key={m.id} className="card mb-2 p-3">
             <div className="flex items-center justify-between gap-2">
@@ -124,10 +124,13 @@ function Admin({ state, reload }) {
               {!m.active && <Pill color="#8A8378">Nonaktif</Pill>}
             </div>
             {me.isAdmin && <div className="mt-2 grid grid-cols-[1fr_auto_auto] gap-2">
-              <select className="inp py-2" value={m.role} onChange={(e) => api(`/api/members/${m.id}`, { method: 'PUT', body: { role: e.target.value } }).then(reload)}>
-                {Object.entries(ROLES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+              <select className="inp py-2" value={m.role} onChange={(e) => api(`/api/members/${m.id}`, { method: 'PUT', body: { role: e.target.value } }).then(reload).catch((er) => toast(er.message, 'err'))}>
+                {Object.entries(ROLES).map(([k, v]) => {
+                  const holder = ['pid_head', 'pid_supervisor'].includes(k) && state.members.find((x) => x.active && x.role === k && x.id !== m.id)
+                  return <option key={k} value={k} disabled={!!holder}>{v}{holder ? ` — sudah: ${holder.name}` : ''}</option>
+                })}</select>
               <button className="btn-g border border-line px-3 text-xs" onClick={() => { setPinFor(m); setPin('') }}>Reset PIN</button>
-              {m.id !== me.id && <button className="btn-g border border-line px-3 text-xs" onClick={() => api(`/api/members/${m.id}`, { method: 'PUT', body: { active: !m.active } }).then(reload)}>{m.active ? 'Nonaktifkan' : 'Aktifkan'}</button>}
+              {m.id !== me.id && <button className="btn-g border border-line px-3 text-xs" onClick={() => api(`/api/members/${m.id}`, { method: 'PUT', body: { active: !m.active } }).then(reload).catch((er) => toast(er.message, 'err'))}>{m.active ? 'Nonaktifkan' : 'Aktifkan'}</button>}
             </div>}
           </div>
         ))}
