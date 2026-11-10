@@ -32,6 +32,32 @@ const NAV = [
   { key: 'saya', label: 'Saya', icon: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm-7 9a7 7 0 0 1 14 0' },
 ]
 
+const ROLE_LABEL = { pid_head: 'PID Head', pid_supervisor: 'PID Supervisor', pid_staff: 'PID Staff / R&D', viewer: 'Viewer' }
+
+function UserMenu({ me, onLogout }) {
+  const [open, setOpen] = useState(false)
+  useEffect(() => {
+    if (!open) return
+    const close = () => setOpen(false)
+    const id = setTimeout(() => document.addEventListener('click', close), 0)
+    return () => { clearTimeout(id); document.removeEventListener('click', close) }
+  }, [open])
+  const initials = me.name.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen(!open)} aria-label="Menu akun"
+        className="flex h-8 w-8 items-center justify-center rounded-full bg-bata text-[11px] font-bold text-cream">{initials}</button>
+      {open && (
+        <div className="absolute right-0 top-10 z-50 w-48 rounded-xl border border-line bg-card p-2 shadow-lg" onClick={(e) => e.stopPropagation()}>
+          <div className="px-2 py-1"><div className="truncate text-sm font-bold">{me.name}</div><div className="text-[11px] text-char/60">{ROLE_LABEL[me.role]}{me.isAdmin ? ' · Admin' : ''}</div></div>
+          <a href="#/saya" onClick={() => setOpen(false)} className="block rounded-lg px-2 py-2 text-sm hover:bg-tint2">Profil & tugas saya</a>
+          <button onClick={() => { setOpen(false); onLogout() }} className="w-full rounded-lg px-2 py-2 text-left text-sm font-semibold text-bata hover:bg-tint2">Logout</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function OfflineBar({ offline, onSync }) {
   const [n, setN] = useState(getQueue().length)
   useEffect(() => { const f = () => setN(getQueue().length); window.addEventListener('pid-queue', f); return () => window.removeEventListener('pid-queue', f) }, [])
@@ -96,6 +122,11 @@ function Shell() {
 
   const [hpath, hquery = ''] = hash.replace('#', '').split('?')
   const [, page, id] = hpath.split('/')
+  const logout = async () => {
+    if (getQueue().length && !confirm(`Masih ada ${getQueue().length} perubahan offline yang belum terkirim dan akan hilang. Tetap logout?`)) return
+    try { await api('/api/auth/logout', { method: 'POST' }) } catch {}
+    setToken(null); setAuthed(false); go('#/beranda')
+  }
   const present = page === 'timeline' && hquery.includes('present=1')
   const waiting = state.projects.filter((p) => p.waitingDecision).length
   const isHead = state.me.role === 'pid_head' || state.me.isAdmin
@@ -107,7 +138,7 @@ function Shell() {
   else if (page === 'timeline') body = <Timeline {...ctx} present={present} />
   else if (page === 'keputusan') body = <Keputusan {...ctx} />
   else if (page === 'vendor') body = <Vendor {...ctx} />
-  else if (page === 'saya') body = <Saya {...ctx} onLogout={async () => { try { await api('/api/auth/logout', { method: 'POST' }) } catch {} setToken(null); setAuthed(false) }} />
+  else if (page === 'saya') body = <Saya {...ctx} onLogout={logout} />
   else body = <Beranda {...ctx} />
 
   if (present) return <div className="min-h-screen bg-cream">{body}</div>
@@ -121,7 +152,10 @@ function Shell() {
             <div className="mt-0.5 text-[11px] text-char/60">Product Innovation Development</div>
           </div>
           <div className="flex flex-col items-end gap-0.5">
-            <a href={`/laporan?t=${state.settings.shareToken}`} target="_blank" rel="noreferrer" className="rounded-full border border-bata px-2.5 py-1 text-[11px] font-bold text-bata sm:hidden">Reporting ↗</a>
+            <div className="flex items-center gap-1.5">
+              <a href={`/laporan?t=${state.settings.shareToken}`} target="_blank" rel="noreferrer" className="rounded-full border border-bata px-2.5 py-1 text-[11px] font-bold text-bata sm:hidden">Reporting ↗</a>
+              <UserMenu me={state.me} onLogout={logout} />
+            </div>
             <span className="hidden sm:block"><Logo /></span>
             <div className="flex items-center gap-1 text-[10px] text-char/50"><span className={`h-1.5 w-1.5 rounded-full ${err || offline ? 'bg-amber' : 'bg-hijau'}`} />{err || offline ? 'Offline' : `Refresh ${fmtWhen(refreshedAt).split(' ').pop()}`}</div>
           </div>
@@ -138,6 +172,11 @@ function Shell() {
           </a>
         ))}
         <a href={`/laporan?t=${state.settings.shareToken}`} target="_blank" rel="noreferrer" className="mt-auto px-3 text-xs font-semibold text-bata underline">Buka Reporting ↗</a>
+        <div className="mt-3 border-t border-line px-3 pt-3">
+          <div className="truncate text-sm font-semibold">{state.me.name}</div>
+          <div className="mb-2 text-[11px] text-char/60">{ROLE_LABEL[state.me.role]}{state.me.isAdmin ? ' · Admin' : ''}</div>
+          <button className="btn-o h-9 min-h-0 w-full text-xs" onClick={logout}>Logout</button>
+        </div>
       </nav>
 
       <main className="mx-auto max-w-6xl px-4 pt-4">{body}</main>
