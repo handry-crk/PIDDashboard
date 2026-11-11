@@ -43,6 +43,7 @@ def setup_project(c, th, cat="online_food", launch="2027-03-05", nama="OF Mar 20
 
 def test_vendor_price_history(c):
     th = c.post("/api/auth/register", json={"name": "Handry", "role": "pid_head", "pin": "1111", "phone": "081111111111"}).json()["token"]
+    c.put("/api/settings", headers=H(th), json={"registrationMode": "open"})
     sent = []
     WA._post = lambda url, headers, data: (sent.append(data), type("R", (), {"status_code": 200, "json": lambda s: {"status": True}})())[1]
     c.put("/api/settings", headers=H(th), json={"waEnabled": True, "waToken": "T"})
@@ -254,3 +255,35 @@ def test_single_head_and_supervisor(c):
     # unchanged role edits (e.g. phone) still fine for the holder
     assert c.put(f"/api/members/{budi['id']}", headers=H(th), json={"phone": "081299990000"}).status_code == 200
     assert c.get("/api/auth/roles").json()["roles"]["pid_supervisor"]["holder"] == "Budi"
+
+
+def test_registration_approval(c):
+    th = c.post("/api/auth/admin-login", json={"pin": "1234"}).json()["token"]
+    c.put("/api/settings", headers=H(th), json={"registrationMode": "approval"})
+    assert c.get("/api/auth/roles").json()["mode"] == "approval"
+    r = c.post("/api/auth/register", json={"name": "Orang Asing", "role": "viewer", "pin": "4444"}).json()
+    assert r.get("pending") is True and "token" not in r
+    # not in login list, cannot log in, cannot see data
+    assert all(m["name"] != "Orang Asing" for m in c.get("/api/auth/members").json())
+    st = c.get("/api/state", headers=H(th)).json()
+    oa = next(m for m in st["members"] if m["name"] == "Orang Asing")
+    assert oa["pending"] is True and oa["active"] is False
+    assert c.post("/api/auth/login", json={"memberId": oa["id"], "pin": "4444"}).status_code == 403
+    # non-admin cannot approve
+    staff = c.post("/api/members", headers=H(th), json={"name": "Ari", "role": "pid_staff", "pin": "5555"})
+    assert staff.status_code == 200
+    ta = c.post("/api/auth/login", json={"memberId": staff.json()["id"], "pin": "5555"}).json()["token"]
+    assert c.post(f"/api/members/{oa['id']}/approve", headers=H(ta)).status_code == 403
+    # approve -> can log in
+    assert c.post(f"/api/members/{oa['id']}/approve", headers=H(th)).status_code == 200
+    assert c.post("/api/auth/login", json={"memberId": oa["id"], "pin": "4444"}).status_code == 200
+    # reject removes a pending registration; active members cannot be "rejected"
+    r2 = c.post("/api/auth/register", json={"name": "Spammer", "role": "viewer", "pin": "4444"}).json()
+    sp = next(m for m in c.get("/api/state", headers=H(th)).json()["members"] if m["name"] == "Spammer")
+    assert c.delete(f"/api/members/{sp['id']}", headers=H(th)).status_code == 200
+    assert c.delete(f"/api/members/{oa['id']}", headers=H(th)).status_code == 400
+    # closed: nobody can self-register
+    c.put("/api/settings", headers=H(th), json={"registrationMode": "closed"})
+    r = c.post("/api/auth/register", json={"name": "Lagi", "role": "viewer", "pin": "4444"})
+    assert r.status_code == 403 and "ditutup" in r.json()["detail"]
+    assert c.put("/api/settings", headers=H(th), json={"registrationMode": "bebas"}).status_code == 400

@@ -229,7 +229,7 @@ def role_availability():
     for r in D.ROLES:
         h = _role_holder(r)
         out[r] = {"available": not h and (first or r != "pid_head"), "holder": h["name"] if h else None}
-    return {"first": first, "roles": out}
+    return {"first": first, "roles": out, "mode": "first" if first else S.get_settings().get("registrationMode", "approval")}
 
 
 class RegisterIn(BaseModel):
@@ -254,15 +254,24 @@ def register(body: RegisterIn):
     if db.members.find_one({"name": {"$regex": f"^{re.escape(body.name.strip())}$", "$options": "i"}}):
         raise HTTPException(409, "Nama sudah terdaftar. Pilih nama Anda di halaman login")
     first = db.members.count_documents({}) == 0
+    mode = S.get_settings().get("registrationMode", "approval")
+    if not first and mode == "closed":
+        raise HTTPException(403, "Pendaftaran sedang ditutup. Minta Admin PID membuatkan akun untuk Anda")
     holder = _role_holder(body.role)
     if holder:
         raise HTTPException(409, f"Role {SINGLE_ROLES[body.role]} sudah dipegang {holder['name']}. Hanya boleh 1 {SINGLE_ROLES[body.role]}; pilih role lain atau minta Admin memindahkan role")
     if body.role == "pid_head" and not first:
         raise HTTPException(403, "Role PID Head hanya bisa diberikan Admin. Daftar dengan role lain, lalu minta Admin mengubah role Anda")
+    pending = not first and mode == "approval"
     m = {"id": D.new_id(), "name": body.name.strip(), "role": body.role, "email": body.email.strip(), "phone": body.phone.strip(),
-         "pinHash": hash_pin(body.pin), "active": True, "isAdmin": first, "failedPins": 0, "lockedUntil": None,
-         "createdAt": D.now_utc_iso()}
+         "pinHash": hash_pin(body.pin), "active": not pending, "pending": pending, "isAdmin": first, "failedPins": 0,
+         "lockedUntil": None, "createdAt": D.now_utc_iso()}
     db.members.insert_one(m)
+    if pending:
+        WA.send_async(WA.phones(["pid_head"]) + [x.get("phone") for x in db.members.find({"isAdmin": True, "active": True})],
+                      f"*Pendaftar baru PID Dashboard*\n{m['name']} mendaftar sebagai {D.ROLES[m['role']]}.\n"
+                      f"Setujui atau tolak di Saya → Pendaftar baru.\n{WA.link()}", "decisionRequest")
+        return {"pending": True, "message": "Pendaftaran terkirim. Akun bisa dipakai setelah disetujui Admin PID."}
     return {"token": new_session(m["id"]), "member": {k: m[k] for k in ("id", "name", "role", "isAdmin")}}
 
 
@@ -270,6 +279,8 @@ def register(body: RegisterIn):
 def login(body: dict = Body(...)):
     db = get_db()
     m = db.members.find_one({"id": body.get("memberId")})
+    if m and m.get("pending"):
+        raise HTTPException(403, "Akun Anda masih menunggu persetujuan Admin PID")
     if not m or not m.get("active", True):
         raise HTTPException(404, "Nama tidak ditemukan atau tidak aktif")
     m = clean(m)
@@ -1043,6 +1054,10 @@ def update_settings(body: dict = Body(...), me=Depends(current_member)):
         if url and not url.startswith("https://script.google.com/"):
             raise HTTPException(400, "URL harus URL Web app Apps Script (https://script.google.com/macros/s/.../exec)")
         upd["launchWebhookUrl"] = url
+    if "registrationMode" in body:
+        if body["registrationMode"] not in ("approval", "closed", "open"):
+            raise HTTPException(400, "Mode pendaftaran tidak valid")
+        upd["registrationMode"] = body["registrationMode"]
     for k in ("waEnabled", "waGroup", "waEvents", "launchSheetId", "launchBoardAuto"):
         if k in body:
             upd[k] = body[k]
@@ -1111,6 +1126,53 @@ def update_member(mid: str, body: dict = Body(...), me=Depends(current_member)):
     if upd.get("active") is False:
         get_db().sessions.delete_many({"memberId": mid})
     return {"ok": True}
+
+
+@app.post("/api/members/{mid}/approve")
+def approve_member(mid: str, me=Depends(current_member)):
+    require(me.get("isAdmin"), "Hanya Admin yang dapat menyetujui pendaftar")
+    db = get_db()
+    m = db.members.find_one({"id": mid})
+    if not m or not m.get("pending"):
+        raise HTTPException(404, "Pendaftar tidak ditemukan")
+    holder = _role_holder(m["role"], exclude_id=mid)
+    if holder:
+        raise HTTPException(409, f"Role {SINGLE_ROLES[m['role']]} sudah dipegang {holder['name']}. Ubah role pendaftar dulu, lalu setujui")
+    db.members.update_one({"id": mid}, {"$set": {"active": True, "pending": False, "approvedBy": me["name"], "approvedAt": D.now_utc_iso()}})
+    if m.get("phone"):
+        WA.send_async([m["phone"]], f"Akun PID Dashboard Anda sudah disetujui. Silakan login: {WA.link()}", "decisionResult")
+    return {"ok": True}
+
+
+@app.delete("/api/members/{mid}")
+def reject_member(mid: str, me=Depends(current_member)):
+    require(me.get("isAdmin"), "Hanya Admin yang dapat menolak pendaftar")
+    db = get_db()
+    m = db.members.find_one({"id": mid})
+    if not m or not m.get("pending"):
+        raise HTTPException(400, "Hanya pendaftar yang belum disetujui yang bisa ditolak. Member aktif cukup dinonaktifkan")
+    db.members.delete_one({"id": mid})
+    return {"ok": True}
+
+
+@app.post("/api/members")
+def admin_create_member(body: RegisterIn, me=Depends(current_member)):
+    require(me.get("isAdmin"), "Hanya Admin yang dapat menambah member")
+    db = get_db()
+    if body.role not in D.ROLES:
+        raise HTTPException(400, "Pilih role yang tersedia")
+    if not re.fullmatch(r"\d{4,6}", body.pin):
+        raise HTTPException(400, "PIN harus 4–6 digit angka")
+    if db.members.find_one({"name": {"$regex": f"^{re.escape(body.name.strip())}$", "$options": "i"}}):
+        raise HTTPException(409, "Nama sudah terdaftar")
+    holder = _role_holder(body.role)
+    if holder:
+        raise HTTPException(409, f"Role {SINGLE_ROLES[body.role]} sudah dipegang {holder['name']}")
+    m = {"id": D.new_id(), "name": body.name.strip(), "role": body.role, "email": body.email.strip(), "phone": body.phone.strip(),
+         "pinHash": hash_pin(body.pin), "active": True, "pending": False, "isAdmin": False, "failedPins": 0, "lockedUntil": None,
+         "createdAt": D.now_utc_iso(), "createdBy": me["name"]}
+    db.members.insert_one(m)
+    return {"ok": True, "id": m["id"]}
 
 
 @app.post("/api/members/{mid}/reset-pin")

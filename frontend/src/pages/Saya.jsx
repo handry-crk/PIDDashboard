@@ -117,8 +117,10 @@ function Admin({ state, reload }) {
         </div>
       </Section>
 
+      <Akses state={state} reload={reload} mode={s.registrationMode || 'approval'} saveSettings={saveSettings} />
+
       <Section fold defaultOpen={false} title="Anggota tim" sub="Role, aktif/nonaktif, reset PIN">
-        {state.members.map((m) => (
+        {state.members.filter((m) => !m.pending).map((m) => (
           <div key={m.id} className="card mb-2 p-3">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0"><div className="truncate font-bold">{m.name} {m.isAdmin && <Pill>Admin</Pill>}</div><div className="truncate text-xs text-char/60">{m.email || '-'} · {m.phone || '-'}</div></div>
@@ -233,6 +235,62 @@ function Admin({ state, reload }) {
         </>}
       </Sheet>
     </>
+  )
+}
+
+const REG_MODES = [
+  ['approval', 'Perlu persetujuan', 'Siapa pun bisa daftar, tapi baru bisa masuk setelah Anda setujui'],
+  ['closed', 'Ditutup', 'Tidak ada yang bisa daftar sendiri. Akun hanya dibuat oleh Admin'],
+  ['open', 'Terbuka', 'Siapa pun yang tahu link bisa langsung masuk (tidak disarankan)'],
+]
+
+function Akses({ state, reload, mode, saveSettings }) {
+  const toast = useToast()
+  const pending = state.members.filter((m) => m.pending)
+  const [f, setF] = useState(null)
+  const act = (p, opt, msg) => api(p, opt).then(() => { toast(msg); reload() }).catch((e) => toast(e.message, 'err'))
+  const holder = (k) => ['pid_head', 'pid_supervisor'].includes(k) && state.members.find((x) => x.active && x.role === k)
+  return (
+    <Section fold defaultOpen={pending.length > 0} title={`Akses & pendaftaran${pending.length ? ` · ${pending.length} menunggu` : ''}`} sub="Siapa yang boleh masuk dashboard">
+      {pending.length > 0 && <div className="mb-3">
+        <div className="mb-2 text-[13px] font-bold">Pendaftar baru</div>
+        {pending.map((m, i) => (
+          <div key={m.id} className="card anim-in mb-2 border-amber p-3" style={{ animationDelay: `${i * 60}ms` }}>
+            <div className="font-bold">{m.name} <span className="text-xs font-normal text-char/60">· {ROLES[m.role]}</span></div>
+            <div className="text-xs text-char/60">{m.email || '-'} · {m.phone || '-'}{m.createdAt ? ` · ${fmtWhen(m.createdAt)}` : ''}</div>
+            {holder(m.role) && <div className="mt-1 text-xs text-bata">Role ini sudah dipegang {holder(m.role).name}. Ganti role dulu di bawah setelah disetujui, atau tolak.</div>}
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <button className="btn-p text-xs" onClick={() => act(`/api/members/${m.id}/approve`, { method: 'POST' }, `${m.name} disetujui`)}>Setujui</button>
+              <button className="btn-o text-xs" onClick={() => confirm(`Tolak pendaftaran ${m.name}?`) && act(`/api/members/${m.id}`, { method: 'DELETE' }, 'Pendaftaran ditolak')}>Tolak</button>
+            </div>
+          </div>
+        ))}
+      </div>}
+      <div className="card mb-3 p-3">
+        <div className="mb-2 text-[13px] font-bold">Cara pendaftaran</div>
+        {REG_MODES.map(([k, l, d]) => (
+          <label key={k} className={`mb-2 flex cursor-pointer gap-3 rounded-lg border p-2 transition-colors ${mode === k ? 'border-bata bg-tint2' : 'border-line'}`}>
+            <input type="radio" className="mt-1 accent-[#A63D2A]" checked={mode === k} onChange={() => saveSettings({ registrationMode: k })} />
+            <span><span className="text-sm font-semibold">{l}</span><span className="block text-xs text-char/60">{d}</span></span>
+          </label>
+        ))}
+      </div>
+      {f ? (
+        <div className="card anim-in p-3">
+          <div className="mb-2 text-[13px] font-bold">Tambah anggota</div>
+          <Field label="Nama"><input className="inp" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
+          <Field label="Role"><select className="inp" value={f.role} onChange={(e) => setF({ ...f, role: e.target.value })}>
+            {Object.entries(ROLES).map(([k, v]) => <option key={k} value={k} disabled={!!holder(k)}>{v}{holder(k) ? ` — sudah: ${holder(k).name}` : ''}</option>)}</select></Field>
+          <Field label="WhatsApp"><input className="inp" inputMode="numeric" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} placeholder="08…" /></Field>
+          <Field label="Email"><input className="inp" type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></Field>
+          <Field label="PIN awal (4–6 digit)"><input className="inp tracking-[6px]" inputMode="numeric" maxLength={6} value={f.pin} onChange={(e) => setF({ ...f, pin: e.target.value })} /></Field>
+          <div className="grid grid-cols-2 gap-2">
+            <button className="btn-g border border-line text-xs" onClick={() => setF(null)}>Batal</button>
+            <button className="btn-p text-xs" disabled={f.name.trim().length < 2 || !/^\d{4,6}$/.test(f.pin)} onClick={() => api('/api/members', { method: 'POST', body: f }).then(() => { toast(`${f.name} ditambahkan`); setF(null); reload() }).catch((e) => toast(e.message, 'err'))}>Simpan</button>
+          </div>
+        </div>
+      ) : <button className="btn-o w-full" onClick={() => setF({ name: '', role: 'pid_staff', phone: '', email: '', pin: '' })}>Tambah anggota</button>}
+    </Section>
   )
 }
 

@@ -11,12 +11,14 @@ export default function Login({ onLogin }) {
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
   const [avail, setAvail] = useState(null)
+  const [regMode, setRegMode] = useState('approval')
+  const [sent, setSent] = useState('')
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value })
 
   useEffect(() => {
     api('/api/auth/members').then((m) => { setMembers(m); if (!m.length) setMode('register') }).catch(() => {})
     api('/api/auth/roles').then((r) => {
-      setAvail(r.roles)
+      setAvail(r.roles); setRegMode(r.mode || 'approval')
       setF((o) => (r.roles[o.role]?.available ? o : { ...o, role: Object.keys(r.roles).find((k) => r.roles[k].available) || 'viewer' }))
     }).catch(() => {})
   }, [])
@@ -28,6 +30,7 @@ export default function Login({ onLogin }) {
       if (mode === 'login') r = await api('/api/auth/login', { method: 'POST', body: { memberId: f.memberId, pin: f.pin } })
       else if (mode === 'admin') r = await api('/api/auth/admin-login', { method: 'POST', body: { pin: f.pin } })
       else r = await api('/api/auth/register', { method: 'POST', body: { name: f.name, role: f.role, email: f.email, phone: f.phone, pin: f.pin } })
+      if (r.pending) { setSent(r.message); setMode('login'); setF((o) => ({ ...o, pin: '' })); return }
       setToken(r.token); onLogin()
     } catch (e2) { setErr(e2.message) } finally { setBusy(false) }
   }
@@ -53,8 +56,13 @@ export default function Login({ onLogin }) {
             </select>
           </Field>
         )}
-        {mode === 'register' && (
+        {sent && mode === 'login' && <div className="anim-in mb-4 rounded-lg border border-line bg-white p-3 text-sm">{sent}</div>}
+        {mode === 'register' && regMode === 'closed' && (
+          <div className="mb-4 rounded-lg bg-tint2 p-3 text-sm">Pendaftaran sedang ditutup. Minta Admin PID menambahkan akun Anda.</div>
+        )}
+        {mode === 'register' && regMode !== 'closed' && (
           <>
+            {regMode === 'approval' && <div className="mb-3 rounded-lg bg-tint2 p-3 text-xs">Akun baru perlu <b>disetujui Admin PID</b> sebelum bisa dipakai.</div>}
             {!members.length && <div className="mb-3 rounded-lg bg-tint2 p-3 text-xs">User pertama otomatis menjadi <b>Admin</b>. Disarankan PID Head mendaftar lebih dulu.</div>}
             <Field label="Nama"><input className="inp" value={f.name} onChange={set('name')} required minLength={2} /></Field>
             <Field label="Role">
@@ -68,11 +76,13 @@ export default function Login({ onLogin }) {
             <Field label="WhatsApp"><input className="inp" inputMode="numeric" value={f.phone} onChange={set('phone')} placeholder="08…" /></Field>
           </>
         )}
+        {!(mode === 'register' && regMode === 'closed') && <>
         <Field label={mode === 'admin' ? 'Admin PIN' : 'PIN (4–6 digit)'}>
           <input className="inp tracking-[6px]" type="password" inputMode="numeric" pattern="\d{4,6}" maxLength={6} value={f.pin} onChange={set('pin')} required />
         </Field>
         {err && <div className="mb-3 rounded-lg border border-bata bg-tint2 p-3 text-sm text-bata">{err}</div>}
-        <button className="btn-p w-full" disabled={busy}>{busy ? 'Sebentar…' : mode === 'register' ? 'Daftar & masuk ' : 'Masuk '}</button>
+        <button className="btn-p w-full" disabled={busy}>{busy ? 'Sebentar…' : mode === 'register' ? (regMode === 'open' ? 'Daftar & masuk' : 'Kirim pendaftaran') : 'Masuk'}</button>
+        </>}
         <p className="mt-6 pb-8 text-center text-[11px] text-char/50">PT Citarasa Kuliner Indonesia · Cimol Bojot AA</p>
       </form>
     </div>

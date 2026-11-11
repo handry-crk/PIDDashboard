@@ -76,6 +76,7 @@ DEFAULT_SETTINGS = {
     "workDays": [1, 2, 3, 4, 5],
     "adminEmail": "",
     "stalledDays": 5,
+    "registrationMode": "approval",
     "slotStart": {},
     "suppressedSlots": [],
     "lastWeeklyText": "",

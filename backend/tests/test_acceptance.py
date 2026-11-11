@@ -39,6 +39,7 @@ def reg(c, name, role, pin="1111"):
 def test_full_flow(c):
     handry = reg(c, "Handry", "pid_head")
     assert handry["member"]["isAdmin"] is True
+    c.put("/api/settings", headers=H(handry["token"]), json={"registrationMode": "open"})
     sinta = reg(c, "Sinta", "pid_supervisor")
     ari = reg(c, "Ari", "pid_staff")
     direksi = reg(c, "Direksi", "viewer")
