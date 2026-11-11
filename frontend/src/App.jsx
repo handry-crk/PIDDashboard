@@ -153,7 +153,7 @@ function Shell() {
           </div>
           <div className="flex flex-col items-end gap-0.5">
             <div className="flex items-center gap-1.5">
-              <a href={`/laporan?t=${state.settings.shareToken}`} target="_blank" rel="noreferrer" className="rounded-full border border-bata px-2.5 py-1 text-[11px] font-bold text-bata sm:hidden">Reporting ↗</a>
+              <a href={`/laporan?t=${state.settings.shareToken}`} target="_blank" rel="noreferrer" className="rounded-full border border-bata px-2.5 py-1 text-[11px] font-bold text-bata sm:hidden">Laporan ↗</a>
               <UserMenu me={state.me} onLogout={logout} />
             </div>
             <span className="hidden sm:block"><Logo /></span>
@@ -171,7 +171,7 @@ function Shell() {
             {n.label}{n.key === 'keputusan' && waiting > 0 && <span className="ml-auto rounded-full bg-amber px-1.5 text-[11px] text-white">{waiting}</span>}
           </a>
         ))}
-        <a href={`/laporan?t=${state.settings.shareToken}`} target="_blank" rel="noreferrer" className="mt-auto px-3 text-xs font-semibold text-bata underline">Buka Reporting ↗</a>
+        <a href={`/laporan?t=${state.settings.shareToken}`} target="_blank" rel="noreferrer" className="mt-auto px-3 text-xs font-semibold text-bata underline">Buka laporan Direksi ↗</a>
         <div className="mt-3 border-t border-line px-3 pt-3">
           <div className="truncate text-sm font-semibold">{state.me.name}</div>
           <div className="mb-2 text-[11px] text-char/60">{ROLE_LABEL[state.me.role]}{state.me.isAdmin ? ' · Admin' : ''}</div>

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { api } from '../api.js'
 import { go } from '../App.jsx'
 import { TimelineMonth, monthOf } from '../timeline.jsx'
-import { Field, Sheet, Title, useToast, fmtTgl, ROMAN, STAGE_NAMES } from '../ui.jsx'
+import { Field, Sheet, Title, useToast, fmtTgl, ROMAN, STAGE_NAMES, STAGE } from '../ui.jsx'
 
 export default function Timeline({ state, reload, present }) {
   const toast = useToast()
@@ -24,18 +24,18 @@ export default function Timeline({ state, reload, present }) {
   return (
     <div className={present ? 'mx-auto max-w-[1400px] px-2 pt-3' : ''}>
       <div className="flex flex-wrap items-end justify-between gap-2">
-        <Title sub={present ? 'Product Innovation Development · CRK Group' : 'Rencana vs aktual semua proyek per stage'}>Timeline Bulanan</Title>
+        <Title emoji="🗓️" sub={present ? 'Product Innovation Development · CRK Group' : 'Rencana vs kenyataan semua proyek'}>Jadwal Bulanan</Title>
         <div className="mb-3 flex gap-2 print:hidden">
           {present
             ? <button className="btn-o text-xs" onClick={() => go('#/timeline')}>Keluar presentasi</button>
-            : <button className="btn-p text-xs" onClick={() => go('#/timeline?present=1')}>Mode presentasi</button>}
-          <button className="btn-o text-xs" onClick={() => window.print()}>Print / PDF</button>
+            : <button className="btn-p text-xs" onClick={() => go('#/timeline?present=1')}>📽️ Mode presentasi</button>}
+          <button className="btn-o text-xs" onClick={() => window.print()}>🖨️ Print / PDF</button>
         </div>
       </div>
       <TimelineMonth projects={state.projects} categories={state.constants.categories} today={state.serverToday} month={month} setMonth={setMonth}
         onEdit={present ? null : open} present={present} />
-      {!present && editor && <p className="mt-3 text-[11px] text-char/60 print:hidden">Ketuk nama stage atau bar untuk mengisi / mengubah tanggal rencana.</p>}
-      <Sheet open={!!edit} onClose={() => setEdit(null)} title={edit ? `${edit.p.nama} · ${ROMAN[edit.n - 1]} ${STAGE_NAMES[edit.n - 1]}` : ''}
+      {!present && editor && <p className="mt-3 text-[11px] text-char/60 print:hidden">Ketuk nama langkah atau bar untuk mengisi / mengubah jadwal.</p>}
+      <Sheet open={!!edit} onClose={() => setEdit(null)} title={edit ? `${edit.p.nama} · ${STAGE[edit.n - 1].emoji} ${STAGE[edit.n - 1].santai}` : ''}
         footer={<div className="grid grid-cols-2 gap-2"><button className="btn-o" onClick={() => go(`#/proyek/${edit.p.id}`)}>Buka proyek</button><button className="btn-p" onClick={save}>Simpan</button></div>}>
         {edit && <>
           <div className="mb-3 text-xs text-char/65">Aktual: {edit.p.stages[edit.n - 1].actualStart ? `${fmtTgl(edit.p.stages[edit.n - 1].actualStart)} – ${edit.p.stages[edit.n - 1].actualEnd ? fmtTgl(edit.p.stages[edit.n - 1].actualEnd) : 'sekarang'}` : 'belum mulai'}</div>

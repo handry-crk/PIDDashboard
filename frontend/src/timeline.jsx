@@ -1,11 +1,11 @@
 import React, { useMemo, useState } from 'react'
-import { BULAN, ROMAN, STAGE_NAMES, Pill, fmtTgl } from './ui.jsx'
+import { BULAN, ROMAN, STAGE_NAMES, STAGE, Pill, fmtTgl } from './ui.jsx'
 
 const DAY = 864e5
 const pd = (s) => (s ? new Date(s.slice(0, 10) + 'T00:00:00') : null)
 const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 const HARI = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab']
-const GATE = { 4: 'Keputusan Go/Revisi/Drop', 6: 'Keputusan Go/Revisi/Drop', 7: 'Persetujuan launch' }
+const GATE = { 4: 'Keputusan lanjut/stop', 6: 'Keputusan lanjut/stop', 7: 'Persetujuan launch' }
 
 export function monthOf(today) {
   const t = pd(today) || new Date()
@@ -30,7 +30,7 @@ export function buildMonth(projects, month, today = '') {
       const actualIn = s.actualStart && overlaps(s.actualStart, s.actualEnd || e0)
       if (!plannedIn && !actualIn) return
       stages.push({ n, ...s, aEnd })
-      const label = `${ROMAN[i]} ${STAGE_NAMES[i]}`
+      const label = `${STAGE[i].emoji} ${STAGE[i].santai}`
       const stStart = s.actualStart ? 'done' : (today && s.plannedStart < today ? 'late' : 'upcoming')
       const stEnd = s.state === 'done' ? 'done' : (today && s.plannedEnd < today ? 'late' : 'upcoming')
       if (s.plannedStart && s.plannedStart >= s0 && s.plannedStart <= e0)
@@ -58,12 +58,12 @@ export function monthSummary(projects, month, today) {
   const gates = agenda.filter((a) => a.kind === 'gate' || a.kind === 'gatestart').reduce((n, a) => n + a.items.length, 0)
   const launches = agenda.filter((a) => a.kind === 'launch').length
   const stageCount = rows.reduce((a, r) => a + r.stages.length, 0)
-  const late = rows.flatMap((r) => r.stages.filter((s) => s.state === 'in_progress' && s.plannedEnd && s.plannedEnd < today).map((s) => `${r.p.nama} (${ROMAN[s.n - 1]} ${STAGE_NAMES[s.n - 1]})`))
-  let txt = `${BULAN[m - 1]} ${y}: ${rows.length} proyek bergerak di ${stageCount} stage`
-  txt += gates ? `; ${gates} agenda pengujian/keputusan PID Head & Direksi` : ''
+  const late = rows.flatMap((r) => r.stages.filter((s) => s.state === 'in_progress' && s.plannedEnd && s.plannedEnd < today).map((s) => `${r.p.nama} di ${STAGE[s.n - 1].santai}`))
+  let txt = `${BULAN[m - 1]} ${y}: ${rows.length} proyek, ${stageCount} langkah dikerjakan`
+  txt += gates ? `; ${gates} agenda tes/keputusan bersama Direksi & PID Head` : ''
   txt += launches ? `; ${launches} target launch` : ''
   txt += '.'
-  if (late.length) txt += ` Namun, ${late.length} stage melewati jadwal: ${late.join(', ')}.`
+  if (late.length) txt += ` Yang telat: ${late.join(', ')}.`
   return txt
 }
 
@@ -98,7 +98,7 @@ export function TimelineMonth({ projects, categories, today, month, setMonth, on
           <div style={{ width: LW + days * W }}>
             {/* header */}
             <div className="flex border-b border-line bg-bata text-cream">
-              <div className="sticky left-0 z-20 shrink-0 bg-bata px-2 py-1.5 text-[11px] font-bold" style={{ width: LW }}>Proyek / stage</div>
+              <div className="sticky left-0 z-20 shrink-0 bg-bata px-2 py-1.5 text-[11px] font-bold" style={{ width: LW }}>Proyek / langkah</div>
               {dayList.map((d) => {
                 const we = d.getDay() === 0 || d.getDay() === 6
                 const isT = iso(d) === today
@@ -107,7 +107,7 @@ export function TimelineMonth({ projects, categories, today, month, setMonth, on
               })}
             </div>
             {/* rows */}
-            {rows.length === 0 && <div className="p-4 text-sm text-char/60">Tidak ada stage terjadwal di bulan ini.</div>}
+            {rows.length === 0 && <div className="p-4 text-sm text-char/60">Tidak ada langkah yang dijadwalkan bulan ini 🌤️</div>}
             {rows.map(({ p, stages }) => (
               <div key={p.id} className="border-b border-line last:border-0">
                 <div className="flex bg-tint2/60">
@@ -131,8 +131,8 @@ export function TimelineMonth({ projects, categories, today, month, setMonth, on
                     <div key={s.n} className="flex">
                       <button className="sticky left-0 z-10 shrink-0 border-r border-line bg-card px-2 py-1 text-left" style={{ width: LW }}
                         onClick={() => onEdit?.(p, s.n)} disabled={!onEdit}>
-                        <span className={`font-extrabold text-hijau ${present ? 'text-[12px]' : 'text-[11px]'}`}>{ROMAN[s.n - 1]}</span>
-                        <span className={`ml-1 ${present ? 'text-[12.5px]' : 'text-[11px]'}`}>{STAGE_NAMES[s.n - 1]}</span>
+                        <span className={present ? 'text-[13px]' : 'text-[12px]'}>{STAGE[s.n - 1].emoji}</span>
+                        <span className={`ml-1 font-semibold ${present ? 'text-[12.5px]' : 'text-[11px]'}`}>{STAGE[s.n - 1].santai}</span>
                         {s.state === 'done' && <span className="ml-1 text-[10px] font-bold text-hijau">✓</span>}
                         {s.state === 'in_progress' && <span className={`ml-1 text-[10px] font-bold ${late ? 'text-bata' : 'text-amber'}`}>●</span>}
                       </button>

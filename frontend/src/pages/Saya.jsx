@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { api, download } from '../api.js'
 import { go } from '../App.jsx'
-import { Empty, Field, Pill, Section, Sheet, StatusPill, Title, useToast, fmtTgl, fmtWhen, ROMAN, slaText } from '../ui.jsx'
+import { Empty, Field, Pill, Section, Sheet, StatusPill, Title, useToast, fmtTgl, fmtWhen, ROMAN, slaText, STAGE } from '../ui.jsx'
 
 const ROLES = { pid_head: 'PID Head', pid_supervisor: 'PID Supervisor', pid_staff: 'PID Staff / R&D', viewer: 'Viewer' }
 const HARI = ['', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu']
@@ -16,19 +16,19 @@ export default function Saya({ state, reload, onLogout }) {
     .sort((a, b) => (a.p.waitingDecision === b.p.waitingDecision ? 0 : a.p.waitingDecision ? -1 : 1) || (a.due || '9').localeCompare(b.due || '9'))
   return (
     <div>
-      <Title sub={`${ROLES[me.role]}${me.isAdmin ? ' · Admin' : ''}`}>{`Halo ${me.name}`}</Title>
-      <Section title="Tugas Saya" sub="Diurutkan berdasarkan due date stage">
+      <Title emoji="🙂" sub={`${ROLES[me.role]}${me.isAdmin ? ' · Admin' : ''}`}>{me.name}</Title>
+      <Section emoji="📋" title="Tugas saya" sub="Yang paling mendesak di atas">
         {mine.length ? mine.map(({ p, due }) => (
           <button key={p.id} onClick={() => go(`#/proyek/${p.id}`)} className="card mb-2 flex w-full items-center justify-between gap-2 p-3 text-left">
             <div className="min-w-0">
               <div className="truncate font-bold">{p.nama}</div>
-              <div className="text-xs text-char/65"><b className="text-hijau">{ROMAN[p.currentStage - 1]}</b> {c.stages[p.currentStage - 1].nama} · due {fmtTgl(due)}</div>
-              {p.waitingDecision && head && <div className="text-xs font-semibold text-amber">Menunggu keputusan Anda</div>}
+              <div className="text-xs text-char/65">{STAGE[p.currentStage - 1].emoji} {STAGE[p.currentStage - 1].santai} · batas {fmtTgl(due)}</div>
+              {p.waitingDecision && head && <div className="text-xs font-semibold text-amber">🗳️ Menunggu keputusan kamu</div>}
               {slaText(p.flags) && <div className={`text-xs font-semibold ${p.flags.lewatSla ? 'text-bata' : 'text-char/60'}`}>{slaText(p.flags)}</div>}
             </div>
             <StatusPill status={p.flags.effectiveStatus} />
           </button>
-        )) : <Empty>Tidak ada tugas aktif untuk Anda.</Empty>}
+        )) : <Empty emoji="☕">Tidak ada tugas saat ini. Santai dulu!</Empty>}
       </Section>
       <ReportLink token={state.settings.shareToken} />
       <Profile me={me} />
@@ -42,7 +42,7 @@ function ReportLink({ token }) {
   const toast = useToast()
   const link = `${window.location.origin}/laporan?t=${token}`
   return (
-    <Section title="Link Reporting" sub="Read-only untuk Direksi & All Divisi, tanpa login">
+    <Section emoji="🔗" title="Link laporan untuk Direksi" sub="Bisa dibuka tanpa login, hanya untuk dilihat">
       <div className="card grid grid-cols-2 gap-2 p-3">
         <a className="btn-p text-xs" href={link} target="_blank" rel="noreferrer">Buka Reporting</a>
         <button className="btn-o text-xs" onClick={() => navigator.clipboard.writeText(link).then(() => toast('Link tersalin')).catch(() => toast('Copy gagal', 'err'))}>Copy link</button>
@@ -55,7 +55,7 @@ function Profile({ me }) {
   const toast = useToast()
   const [f, setF] = useState({ email: me.email || '', phone: me.phone || '' })
   return (
-    <Section title="Profil Saya" sub="Email dipakai untuk digest, nudge, dan mention">
+    <Section emoji="👤" title="Profil" sub="Untuk notifikasi email & WhatsApp">
       <div className="card p-3">
         <Field label="Email"><input className="inp" type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></Field>
         <Field label="WhatsApp"><input className="inp" inputMode="numeric" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} /></Field>
@@ -85,7 +85,8 @@ function Admin({ state, reload }) {
 
   return (
     <>
-      <Section title="Panel Admin" sub="Khusus PID Head / Admin">
+      <div className="mb-3 mt-8 text-[13px] font-bold uppercase tracking-wide text-char/45">⚙️ Pengaturan admin</div>
+      <Section fold defaultOpen={false} emoji="🧰" title="Alat admin" sub="Import data, link laporan, kirim laporan, export">
         {empty && me.isAdmin && (
           <div className="card mb-3 border-bata p-3">
             <div className="mb-2 text-sm">Database masih kosong. Import kondisi whiteboard SO-PID-010 (9 Nov 2026): Bumbu Cimol, Minuman, Produk Online, Brand Baru.</div>
@@ -116,7 +117,7 @@ function Admin({ state, reload }) {
         </div>
       </Section>
 
-      <Section title="Member" sub="Role, status aktif, reset PIN · PID Head & PID Supervisor masing-masing 1 orang">
+      <Section fold defaultOpen={false} emoji="👥" title="Anggota tim" sub="Role, aktif/nonaktif, reset PIN">
         {state.members.map((m) => (
           <div key={m.id} className="card mb-2 p-3">
             <div className="flex items-center justify-between gap-2">
@@ -136,7 +137,7 @@ function Admin({ state, reload }) {
         ))}
       </Section>
 
-      <Section title="Slot & Cadence" sub="Bulan launch per kategori (slot dibuat otomatis 15 bulan ke depan)">
+      <Section fold defaultOpen={false} emoji="📅" title="Jadwal launch per kategori" sub="Bulan-bulan launch tiap kategori menu">
         <div className="card p-3">
           {c.categoryOrder.map((cat) => (
             <div key={cat} className="mb-3">
@@ -166,7 +167,7 @@ function Admin({ state, reload }) {
         </div>
       </Section>
 
-      <Section title="SLA per Stage" sub="Hari per stage I–VII; planned date proyek aktif dihitung ulang">
+      <Section fold defaultOpen={false} emoji="⏱️" title="Batas waktu tiap langkah" sub="Berapa hari tiap langkah boleh berjalan">
         <div className="card overflow-x-auto p-3">
           <table className="w-full min-w-[420px] text-[12px]">
             <thead><tr className="bg-bata text-cream"><th className="px-2 py-1.5 text-left">Kategori</th>{ROMAN.map((r) => <th key={r} className="px-1">{r}</th>)}<th className="px-1">Total</th></tr></thead>
@@ -182,7 +183,7 @@ function Admin({ state, reload }) {
         </div>
       </Section>
 
-      <Section title="Screening & Food Cost" sub="Kriteria Penyaringan Ide dan target food cost">
+      <Section fold defaultOpen={false} emoji="🔍" title="Kriteria nilai & food cost" sub="Dipakai saat Saring Ide dan Bikin Contoh">
         <div className="card p-3">
           {s.screeningCriteria.map((cr, i) => (
             <div key={cr.id} className="mb-2 grid grid-cols-[1fr_64px] gap-2">
@@ -199,7 +200,7 @@ function Admin({ state, reload }) {
         </div>
       </Section>
 
-      <Section title="Reminder" sub="Jadwal email otomatis (WIB)">
+      <Section fold defaultOpen={false} emoji="⏰" title="Pengingat otomatis" sub="Jam kirim email (WIB)">
         <div className="card p-3">
           <div className="grid grid-cols-2 gap-2">
             <Field label="Nudge supervisor"><input type="time" className="inp" value={s.nudgeTime} onChange={(e) => setS({ ...s, nudgeTime: e.target.value })} /></Field>
@@ -255,7 +256,7 @@ function WhatsApp({ members, me }) {
   }
   const noPhone = members.filter((m) => m.active && m.role !== 'viewer' && !m.phone)
   return (
-    <Section title="Notifikasi WhatsApp" sub="Via Fonnte · token dari menu Device di fonnte.com">
+    <Section fold defaultOpen={false} emoji="💬" title="Notifikasi WhatsApp" sub="Via Fonnte">
       <div className="card p-3">
         <label className="mb-3 flex min-h-[44px] items-center justify-between gap-3 rounded-lg border border-line px-3">
           <span className="text-sm font-semibold">Aktifkan notifikasi WhatsApp</span>
@@ -316,7 +317,7 @@ function LaunchBoardSettings() {
   const sheetUrl = `https://docs.google.com/spreadsheets/d/${c.sheetId}/edit`
   const Step = ({ n, children }) => <div className="mb-2 flex gap-2 text-[13px]"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-bata text-[11px] font-bold text-cream">{n}</span><div className="flex-1">{children}</div></div>
   return (
-    <Section title="Product Launch Board" sub="Sinkron hand-off stage VII ke Google Sheet">
+    <Section fold defaultOpen={false} emoji="📋" title="Product Launch Board" sub="Sambungan ke Google Sheet">
       <div className="card p-3">
         <div className={`mb-3 rounded-lg p-2 text-xs ${c.configured ? 'bg-[#DCEADF]' : 'bg-[#F5E6CC]'}`}>{c.configured ? `Terhubung (${c.mode === 'appsscript' ? 'Apps Script' : 'service account'})` : 'Belum terhubung. Cukup akun Google, tanpa Google Cloud.'}</div>
         <Step n={1}><button className="font-semibold text-bata underline" onClick={copyScript}>Copy kode Apps Script</button></Step>
@@ -349,7 +350,7 @@ function ResetData({ reload }) {
     } catch (e) { toast(e.message, 'err') } finally { setBusy(false) }
   }
   return (
-    <Section title="Reset Data" sub="Hapus data uji coba sebelum dipakai resmi">
+    <Section fold defaultOpen={false} emoji="🧹" title="Reset data" sub="Hapus data uji coba">
       <div className="card border-bata p-3">
         <div className="mb-3 text-xs text-char/75">Member, PIN, dan Settings (SLA, cadence, WhatsApp, Launch Board) tidak ikut terhapus. Backup otomatis dibuat sebelum reset.</div>
         <button className="btn-o w-full" onClick={() => setOpen(true)}>Reset data…</button>
@@ -376,7 +377,7 @@ function AdminPin() {
   const toast = useToast()
   const [pin, setPin] = useState('')
   return (
-    <Section title="Admin PIN" sub="Fallback login Admin (default 1234)">
+    <Section fold defaultOpen={false} emoji="🔑" title="PIN Admin" sub="PIN cadangan untuk masuk sebagai Admin">
       <div className="card grid grid-cols-[1fr_auto] gap-2 p-3">
         <input className="inp tracking-[6px]" inputMode="numeric" maxLength={6} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))} placeholder="PIN baru" />
         <button className="btn-p" disabled={!/^\d{4,6}$/.test(pin)} onClick={() => api('/api/settings/admin-pin', { method: 'PUT', body: { pin } }).then(() => { toast('Admin PIN diubah'); setPin('') }).catch((e) => toast(e.message, 'err'))}>Simpan</button>

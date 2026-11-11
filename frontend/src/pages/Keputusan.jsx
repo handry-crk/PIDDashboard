@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { api } from '../api.js'
 import { go } from '../App.jsx'
-import { Empty, Pill, Title, fmtPct, fmtRp, fmtWhen, ROMAN } from '../ui.jsx'
+import { Empty, Pill, Title, fmtPct, fmtRp, fmtWhen, ROMAN, STAGE, CAT } from '../ui.jsx'
 
 function Evidence({ id, stage }) {
   const [d, setD] = useState(null)
@@ -40,22 +40,22 @@ export default function Keputusan({ state }) {
     && p.stages[p.currentStage - 1].state === 'in_progress' && p.stages[p.currentStage - 1].decision !== 'go')
   return (
     <div>
-      <Title sub={head ? 'Go / Revisi / Drop di stage IV, VI, VII' : 'Hanya PID Head yang dapat memberi keputusan'}>Antrian Keputusan</Title>
+      <Title emoji="🗳️" sub={head ? 'Putuskan: lanjut, revisi, atau stop' : 'Hanya PID Head yang bisa memutuskan'}>Menunggu Keputusan</Title>
       {waiting.length ? waiting.map((p) => (
         <div key={p.id} className="card mb-3 p-3">
           <div className="flex items-start justify-between gap-2">
             <div><div className="font-bold">{p.nama}</div><div className="text-xs text-char/60">{p.kode} · {c.categories[p.category].label}</div></div>
-            <Pill color="#B8741A">{ROMAN[p.currentStage - 1]} {c.stages[p.currentStage - 1].nama}</Pill>
+            <Pill color="#B8741A">{STAGE[p.currentStage - 1].emoji} {STAGE[p.currentStage - 1].santai}</Pill>
           </div>
           <Evidence id={p.id} stage={p.currentStage} />
-          <button className="btn-p mt-3 w-full" onClick={() => go(`#/proyek/${p.id}`)}>{head ? 'Review & putuskan' : 'Lihat detail'}</button>
+          <button className="btn-p mt-3 w-full" onClick={() => go(`#/proyek/${p.id}`)}>{head ? '🗳️ Lihat & putuskan' : 'Lihat detail'}</button>
         </div>
-      )) : <Empty>Tidak ada keputusan yang menunggu.</Empty>}
+      )) : <Empty emoji="🙌">Tidak ada yang menunggu keputusan 🙌</Empty>}
       {atGate.length > 0 && <>
-        <div className="mb-2 mt-6 text-[13px] font-bold">Di stage keputusan, belum diajukan</div>
+        <div className="mb-2 mt-6 text-[13px] font-bold">Sudah di tahap keputusan, tapi belum diajukan</div>
         {atGate.map((p) => (
           <button key={p.id} onClick={() => go(`#/proyek/${p.id}`)} className="card mb-2 flex w-full items-center justify-between p-3 text-left text-sm">
-            <span><b>{p.nama}</b><span className="text-char/60"> · {ROMAN[p.currentStage - 1]} {c.stages[p.currentStage - 1].nama}</span></span>
+            <span><b>{p.nama}</b><span className="text-char/60"> · {STAGE[p.currentStage - 1].emoji} {STAGE[p.currentStage - 1].santai}</span></span>
             {p.stages[p.currentStage - 1].decision === 'revisi' && <Pill color="#B8741A">Revisi</Pill>}
           </button>
         ))}

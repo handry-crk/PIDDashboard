@@ -2,19 +2,19 @@
 @tailwind components;
 @tailwind utilities;
 
-html, body { background: #ECE4D4; color: #212121; -webkit-tap-highlight-color: transparent; }
+html, body { background: #F3EEE5; color: #212121; -webkit-tap-highlight-color: transparent; }
 body { overflow-x: hidden; }
 input, select, textarea { font-size: 16px; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { scrollbar-width: none; }
 @layer components {
-  .inp { @apply w-full rounded-lg border border-line bg-white/70 px-3 py-2.5 text-[16px] outline-none focus:border-bata focus:ring-1 focus:ring-bata; }
-  .lbl { @apply mb-1 block text-xs font-semibold text-char/70; }
-  .btn { @apply inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-lg px-4 text-sm font-semibold transition active:scale-[.98] disabled:opacity-50; }
-  .btn-p { @apply btn bg-bata text-cream hover:bg-[#9c2820]; }
-  .btn-o { @apply btn border border-bata text-bata bg-transparent hover:bg-tint2; }
-  .btn-g { @apply btn text-char/80 hover:bg-tint2; }
-  .card { @apply rounded-xl border border-line bg-card; }
+  .inp { @apply w-full rounded-xl border border-line bg-white px-3.5 py-2.5 text-[16px] outline-none transition focus:border-bata focus:ring-2 focus:ring-bata/20; }
+  .lbl { @apply mb-1 block text-[12.5px] font-semibold text-char/70; }
+  .btn { @apply inline-flex min-h-[46px] items-center justify-center gap-1.5 rounded-xl px-4 text-[14px] font-bold transition active:scale-[.97] disabled:opacity-50; }
+  .btn-p { @apply btn bg-bata text-white shadow-[0_3px_0_#8a231d] hover:bg-[#a52a23] active:shadow-none active:translate-y-[2px]; }
+  .btn-o { @apply btn border-2 border-bata/80 bg-white/60 text-bata hover:bg-tint2; }
+  .btn-g { @apply btn text-char/80 hover:bg-black/5; }
+  .card { @apply rounded-2xl border border-black/[0.06] bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)]; }
 }
 
 @media print {

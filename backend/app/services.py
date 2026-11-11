@@ -151,27 +151,29 @@ def _months_ahead(period, t):
     return (y - t.year) * 12 + (m - t.month)
 
 
+SANTAI = ["Cari Ide", "Saring Ide", "Bikin Konsep", "Tes Konsep", "Bikin Contoh", "Tes Rasa", "Siap Jual"]
+
+
 def takeaway(active, over, blocked, waiting, nxt, empty3, t):
     if not active:
-        return "Belum ada proyek aktif. Buat proyek pertama dari Launch Calendar atau tombol + Proyek."
-    s = f"PID sedang mengembangkan {len(active)} proyek"
+        return "Belum ada proyek berjalan. Yuk mulai proyek pertama dari Kalender Launch atau tombol + Proyek."
+    s = f"Ada {len(active)} proyek berjalan."
     if nxt:
-        s += f"; launch berikutnya **{nxt['nama']}** dalam {(D.pdate(nxt['targetLaunch']) - t).days} hari"
-    s += "."
+        s += f" Menu berikutnya yang launch: **{nxt['nama']}**, {(D.pdate(nxt['targetLaunch']) - t).days} hari lagi."
     issues = []
     if over:
-        names = ", ".join(f"{p['nama']} ({D.STAGES[p['currentStage'] - 1]['nama']})" for p in over[:2])
-        issues.append(f"{len(over)} proyek melewati SLA: {names}")
+        names = ", ".join(f"{p['nama']} di {SANTAI[p['currentStage'] - 1]}" for p in over[:2])
+        issues.append(f"{len(over)} proyek telat jadwal ({names})")
     if blocked:
-        issues.append(f"{len(blocked)} proyek blocked dan membutuhkan dukungan")
+        issues.append(f"{len(blocked)} proyek tersendat dan butuh bantuan")
     if waiting:
-        issues.append(f"{len(waiting)} keputusan menunggu PID Head")
+        issues.append(f"{len(waiting)} proyek menunggu keputusan PID Head")
     if empty3:
-        issues.append(f"{len(empty3)} slot launch 3 bulan ke depan belum memiliki proyek")
+        issues.append(f"{len(empty3)} jadwal launch 3 bulan ke depan belum ada proyeknya")
     if issues:
-        s += " Namun, " + "; ".join(issues) + "."
+        s += " Perlu dicek: " + "; ".join(issues) + "."
     else:
-        s += " Semua proyek berjalan sesuai SLA."
+        s += " Semua berjalan sesuai jadwal 👍"
     return s
 
 

@@ -89,10 +89,10 @@ export default function Vendor({ state }) {
 
   return (
     <div>
-      <Title sub="Master vendor bahan baku, utama untuk Online Food" right={<div className="flex gap-2">
+      <Title emoji="🏪" sub="Pemasok bahan baku, terutama untuk menu Online Food" right={<div className="flex gap-2">
         {head && <button className="btn-g border border-line px-3 text-xs" onClick={() => download('/api/export/vendors.csv', 'pid-vendors.csv')}>Export CSV</button>}
-        {editor && <button className="btn-p hidden px-3 sm:inline-flex" onClick={() => setEdit({ ...BLANK })}>+ Vendor</button>}</div>}>Daftar Vendor</Title>
-      <input className="inp mb-2" placeholder="Cari vendor, kota, bahan…" value={q} onChange={(e) => setQ(e.target.value)} />
+        {editor && <button className="btn-p hidden px-3 sm:inline-flex" onClick={() => setEdit({ ...BLANK })}>+ Vendor</button>}</div>}>Vendor</Title>
+      <input className="inp mb-2" placeholder="🔎 Cari vendor, kota, atau bahan…" value={q} onChange={(e) => setQ(e.target.value)} />
       <div className="mb-4 grid grid-cols-2 gap-2">
         <select className="inp" value={kat} onChange={(e) => setKat(e.target.value)}><option value="">Semua kategori bahan</option>{c.kategoriBahan.map((k) => <option key={k}>{k}</option>)}</select>
         <select className="inp" value={stt} onChange={(e) => setStt(e.target.value)}><option value="">Semua status</option>{c.vendorStatuses.map((k) => <option key={k} value={k}>{VSTATUS[k]}</option>)}</select>

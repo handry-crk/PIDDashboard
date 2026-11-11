@@ -36,13 +36,13 @@ export default function Login({ onLogin }) {
     <div className="flex min-h-screen flex-col">
       <div className="bg-bata px-6 pb-10 pt-8 text-cream">
         <Logo light />
-        <div className="mt-8 text-[40px] font-extrabold leading-none">PID</div>
-        <div className="text-[28px] font-normal leading-tight">Dashboard</div>
-        <div className="mt-4 flex items-center gap-3 text-sm font-semibold"><span className="h-px w-6 bg-cream" />Product Innovation Development<span className="h-px w-6 bg-cream" /></div>
+        <div className="mt-6 text-[30px] leading-none">🍡 🧋 🛵 ✨</div>
+        <div className="mt-4 text-[34px] font-extrabold leading-none">PID Dashboard</div>
+        <div className="mt-2 text-[15px] text-cream/85">Pantau menu baru dari ide sampai launch</div>
       </div>
       <form onSubmit={submit} className="mx-auto -mt-5 w-full max-w-md flex-1 rounded-t-2xl bg-cream px-6 pt-6">
         <div className="mb-5 grid grid-cols-3 rounded-lg border border-line p-1 text-sm font-semibold">
-          {[['login', 'Login'], ['register', 'Daftar'], ['admin', 'Admin PIN']].map(([k, l]) => (
+          {[['login', 'Masuk'], ['register', 'Daftar'], ['admin', 'Admin']].map(([k, l]) => (
             <button type="button" key={k} onClick={() => { setMode(k); setErr('') }} className={`min-h-[40px] rounded-md ${mode === k ? 'bg-bata text-cream' : 'text-char/70'}`}>{l}</button>
           ))}
         </div>
@@ -73,7 +73,7 @@ export default function Login({ onLogin }) {
           <input className="inp tracking-[6px]" type="password" inputMode="numeric" pattern="\d{4,6}" maxLength={6} value={f.pin} onChange={set('pin')} required />
         </Field>
         {err && <div className="mb-3 rounded-lg border border-bata bg-tint2 p-3 text-sm text-bata">{err}</div>}
-        <button className="btn-p w-full" disabled={busy}>{busy ? 'Memproses…' : mode === 'register' ? 'Daftar & masuk' : 'Login'}</button>
+        <button className="btn-p w-full" disabled={busy}>{busy ? 'Sebentar…' : mode === 'register' ? 'Daftar & masuk 🚀' : 'Masuk 👋'}</button>
         <p className="mt-6 pb-8 text-center text-[11px] text-char/50">PT Citarasa Kuliner Indonesia · Cimol Bojot AA</p>
       </form>
     </div>

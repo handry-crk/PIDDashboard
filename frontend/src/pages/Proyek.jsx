@@ -2,10 +2,10 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { api } from '../api.js'
 import { go } from '../App.jsx'
 import { ProjectCard } from '../overview.jsx'
-import { Empty, Field, Sheet, Title, useToast, fmtPeriod, STATUS } from '../ui.jsx'
+import { Empty, Field, Sheet, Title, useToast, fmtPeriod, STATUS, STAGE, CAT } from '../ui.jsx'
 
 const FILTERS = [
-  ['aktif', 'Aktif'], ['sla', 'Lewat SLA'], ['keputusan', 'Menunggu keputusan'], ['blocked', 'Blocked'], ['done', 'Launched'], ['dropped', 'Dropped'], ['semua', 'Semua'],
+  ['aktif', '🏃 Berjalan'], ['sla', '🐢 Telat'], ['keputusan', '🗳️ Tunggu keputusan'], ['blocked', '🛑 Tersendat'], ['done', '🎉 Sudah launch'], ['dropped', '✖️ Dihentikan'], ['semua', 'Semua'],
 ]
 
 export function NewProjectSheet({ open, onClose, state, presetSlot, reload }) {
@@ -31,19 +31,19 @@ export function NewProjectSheet({ open, onClose, state, presetSlot, reload }) {
   }
   const sub = c.categories[f.category].subTypes
   return (
-    <Sheet open={open} onClose={onClose} title="Proyek baru" footer={<button className="btn-p w-full" disabled={busy || f.nama.length < 2} onClick={submit}>{busy ? 'Menyimpan…' : 'Buat proyek'}</button>}>
+    <Sheet open={open} onClose={onClose} title="✨ Proyek baru" footer={<button className="btn-p w-full" disabled={busy || f.nama.length < 2} onClick={submit}>{busy ? 'Menyimpan…' : 'Buat proyek'}</button>}>
       <Field label="Kategori">
         <div className="grid grid-cols-2 gap-2">
           {c.categoryOrder.map((k) => (
             <button key={k} type="button" onClick={() => setF({ ...f, category: k, slotId: '', subType: [] })}
               className={`min-h-[52px] rounded-lg border px-2 text-left text-sm font-semibold ${f.category === k ? 'border-bata bg-bata text-cream' : 'border-line bg-white/60'}`}>
-              {c.categories[k].label}<div className={`text-[10.5px] font-normal ${f.category === k ? 'text-cream/80' : 'text-char/60'}`}>{c.categories[k].cadence}</div>
+              <span className="mr-1">{CAT[k].emoji}</span>{c.categories[k].label}<div className={`text-[10.5px] font-normal ${f.category === k ? 'text-cream/80' : 'text-char/60'}`}>{c.categories[k].cadence}</div>
             </button>
           ))}
         </div>
       </Field>
       {sub.length > 0 && (
-        <Field label="Jenis varian (boleh lebih dari 1)">
+        <Field label="Jenis varian cimol (boleh lebih dari 1)">
           <div className="flex flex-wrap gap-2">
             {sub.map((s) => {
               const on = f.subType.includes(s)
@@ -53,16 +53,16 @@ export function NewProjectSheet({ open, onClose, state, presetSlot, reload }) {
           </div>
         </Field>
       )}
-      <Field label="Slot launch" hint="Planned date tiap stage dihitung mundur dari tanggal launch sesuai SLA kategori">
+      <Field label="Rencana launch" hint="Jadwal tiap langkah otomatis dihitung mundur dari tanggal launch">
         <select className="inp" value={f.slotId} onChange={(e) => setF({ ...f, slotId: e.target.value })}>
-          <option value="">Tanggal custom / TBD</option>
-          {freeSlots.map((s) => <option key={s.id} value={s.id}>{s.label}{s.flags.slotTerlambat ? ' (terlambat mulai)' : ''}</option>)}
+          <option value="">Pilih tanggal sendiri / belum tahu</option>
+          {freeSlots.map((s) => <option key={s.id} value={s.id}>{s.label}{s.flags.slotTerlambat ? ' (harusnya sudah mulai)' : ''}</option>)}
         </select>
       </Field>
       {!f.slotId && <Field label="Target launch"><input type="date" className="inp" value={f.targetLaunch} onChange={(e) => setF({ ...f, targetLaunch: e.target.value })} /></Field>}
       <Field label="Nama proyek"><input className="inp" value={f.nama} onChange={(e) => setF({ ...f, nama: e.target.value })} placeholder="mis. Varian Cimol Jun 2027" /></Field>
-      <Field label="Objective"><textarea className="inp" rows={2} value={f.objective} onChange={(e) => setF({ ...f, objective: e.target.value })} placeholder="1–2 kalimat tujuan proyek" /></Field>
-      <Field label="PIC">
+      <Field label="Tujuan"><textarea className="inp" rows={2} value={f.objective} onChange={(e) => setF({ ...f, objective: e.target.value })} placeholder="Mau bikin menu apa dan kenapa? (1–2 kalimat)" /></Field>
+      <Field label="Penanggung jawab">
         <select className="inp" value={f.picId} onChange={(e) => setF({ ...f, picId: e.target.value })}>
           {editors.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
         </select>
@@ -101,23 +101,23 @@ export default function Proyek({ state, reload }) {
 
   return (
     <div>
-      <Title sub={`${list.length} proyek`} right={editor && <button className="btn-p hidden sm:inline-flex" onClick={() => { setPresetSlot(null); setOpenNew(true) }}>+ Proyek</button>}>Daftar Proyek</Title>
-      <input className="inp mb-2" placeholder="Cari nama, kode, kandidat…" value={q} onChange={(e) => setQ(e.target.value)} />
+      <Title sub={`${list.length} proyek`} right={editor && <button className="btn-p hidden sm:inline-flex" onClick={() => { setPresetSlot(null); setOpenNew(true) }}>+ Proyek</button>} emoji="🧭">Semua Proyek</Title>
+      <input className="inp mb-2" placeholder="🔎 Cari nama menu, kode, atau ide…" value={q} onChange={(e) => setQ(e.target.value)} />
       <div className="no-scrollbar -mx-4 mb-2 flex gap-2 overflow-x-auto px-4">
         {FILTERS.map(([k, l]) => <button key={k} onClick={() => setFilter(k)} className={`min-h-[36px] shrink-0 rounded-full border px-3 text-xs font-semibold ${filter === k ? 'border-bata bg-bata text-cream' : 'border-bata text-bata'}`}>{l}</button>)}
       </div>
       <div className="no-scrollbar -mx-4 mb-4 flex gap-2 overflow-x-auto px-4">
-        {[['', 'Semua kategori'], ...c.categoryOrder.map((k) => [k, c.categories[k].label])].map(([k, l]) =>
+        {[['', 'Semua kategori'], ...c.categoryOrder.map((k) => [k, `${CAT[k].emoji} ${c.categories[k].label}`])].map(([k, l]) =>
           <button key={k} onClick={() => setCat(k)} className={`min-h-[34px] shrink-0 rounded-full px-3 text-xs font-semibold ${cat === k ? 'bg-char text-cream' : 'bg-tint2 text-char/80'}`}>{l}</button>)}
       </div>
       <div className="no-scrollbar -mx-4 mb-4 flex gap-1.5 overflow-x-auto px-4">
-        <button onClick={() => setStage(0)} className={`min-h-[34px] shrink-0 rounded-full px-3 text-xs font-semibold ${!stage ? 'bg-hijau text-white' : 'border border-hijau text-hijau'}`}>Semua stage</button>
+        <button onClick={() => setStage(0)} className={`min-h-[34px] shrink-0 rounded-full px-3 text-xs font-semibold ${!stage ? 'bg-char text-white' : 'bg-black/5 text-char/70'}`}>Semua langkah</button>
         {c.stages.map((s) => <button key={s.n} onClick={() => setStage(s.n)} title={s.nama}
-          className={`min-h-[34px] shrink-0 rounded-full px-3 text-xs font-bold ${stage === s.n ? 'bg-hijau text-white' : 'border border-hijau text-hijau'}`}>{s.roman}</button>)}
+          className={`min-h-[34px] shrink-0 rounded-full px-3 text-xs font-bold ${stage === s.n ? 'bg-char text-white' : 'bg-black/5 text-char/70'}`}>{STAGE[s.n - 1].emoji} {STAGE[s.n - 1].santai}</button>)}
       </div>
-      {stage > 0 && <div className="-mt-2 mb-3 text-xs text-char/65">Stage {c.stages[stage - 1].roman} · {c.stages[stage - 1].nama}</div>}
+      {stage > 0 && <div className="-mt-2 mb-3 text-xs text-char/65">{STAGE[stage - 1].arti}</div>}
       {list.length ? <div className="grid gap-2.5 md:grid-cols-2">{list.map((p) => <ProjectCard key={p.id} p={p} stages={c.stages} categories={c.categories} onClick={() => go(`#/proyek/${p.id}`)} />)}</div>
-        : <Empty>Tidak ada proyek untuk filter ini.</Empty>}
+        : <Empty emoji="🔍">Tidak ada proyek untuk pilihan ini.</Empty>}
       {editor && <button onClick={() => { setPresetSlot(null); setOpenNew(true) }} className="fixed bottom-[80px] right-4 z-30 flex h-14 items-center gap-1 rounded-full bg-bata px-5 text-sm font-bold text-cream shadow-lg sm:hidden">+ Proyek</button>}
       <NewProjectSheet open={openNew} onClose={() => setOpenNew(false)} state={state} presetSlot={presetSlot} reload={reload} />
     </div>
