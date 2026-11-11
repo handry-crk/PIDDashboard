@@ -36,7 +36,6 @@ export default function Login({ onLogin }) {
     <div className="flex min-h-screen flex-col">
       <div className="bg-bata px-6 pb-10 pt-8 text-cream">
         <Logo light />
-        <div className="mt-6 text-[30px] leading-none">🍡 🧋 🛵 ✨</div>
         <div className="mt-4 text-[34px] font-extrabold leading-none">PID Dashboard</div>
         <div className="mt-2 text-[15px] text-cream/85">Pantau menu baru dari ide sampai launch</div>
       </div>
@@ -73,7 +72,7 @@ export default function Login({ onLogin }) {
           <input className="inp tracking-[6px]" type="password" inputMode="numeric" pattern="\d{4,6}" maxLength={6} value={f.pin} onChange={set('pin')} required />
         </Field>
         {err && <div className="mb-3 rounded-lg border border-bata bg-tint2 p-3 text-sm text-bata">{err}</div>}
-        <button className="btn-p w-full" disabled={busy}>{busy ? 'Sebentar…' : mode === 'register' ? 'Daftar & masuk 🚀' : 'Masuk 👋'}</button>
+        <button className="btn-p w-full" disabled={busy}>{busy ? 'Sebentar…' : mode === 'register' ? 'Daftar & masuk ' : 'Masuk '}</button>
         <p className="mt-6 pb-8 text-center text-[11px] text-char/50">PT Citarasa Kuliner Indonesia · Cimol Bojot AA</p>
       </form>
     </div>

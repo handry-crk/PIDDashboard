@@ -40,7 +40,7 @@ export function Attachments({ files, params, can, onChange, label = 'Upload file
           ))}
           {can && imagesOnly && (
             <label className={`flex h-20 w-20 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-bata text-center text-[11px] font-semibold text-bata ${busy ? 'opacity-50' : ''}`}>
-              {busy ? 'Upload…' : <>📷<span>{label}</span></>}
+              {busy ? 'Upload…' : <><span>{label}</span></>}
               <input type="file" accept="image/*" multiple className="hidden" onChange={upload} disabled={busy} />
             </label>
           )}
@@ -49,7 +49,7 @@ export function Attachments({ files, params, can, onChange, label = 'Upload file
       {docs.map((f) => (
         <div key={f.id} className="mb-1.5 flex items-center justify-between gap-2 rounded-lg border border-line bg-white/50 px-2.5 py-2 text-sm">
           <a href={f.url} target="_blank" rel="noreferrer" className="min-w-0 flex-1">
-            <div className="truncate font-semibold text-bata underline">📄 {f.name}</div>
+            <div className="truncate font-semibold text-bata underline">{f.name}</div>
             <div className="text-[10.5px] text-char/55">{f.byName || ''}{f.at ? ` · ${fmtWhen(f.at)}` : ''}</div>
           </a>
           {can && <button onClick={() => del(f)} className="h-8 w-8 shrink-0 text-lg text-bata" aria-label="Delete">×</button>}

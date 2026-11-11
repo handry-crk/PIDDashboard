@@ -30,7 +30,7 @@ export function buildMonth(projects, month, today = '') {
       const actualIn = s.actualStart && overlaps(s.actualStart, s.actualEnd || e0)
       if (!plannedIn && !actualIn) return
       stages.push({ n, ...s, aEnd })
-      const label = `${STAGE[i].emoji} ${STAGE[i].santai}`
+      const label = `${STAGE[i].santai}`
       const stStart = s.actualStart ? 'done' : (today && s.plannedStart < today ? 'late' : 'upcoming')
       const stEnd = s.state === 'done' ? 'done' : (today && s.plannedEnd < today ? 'late' : 'upcoming')
       if (s.plannedStart && s.plannedStart >= s0 && s.plannedStart <= e0)
@@ -107,7 +107,7 @@ export function TimelineMonth({ projects, categories, today, month, setMonth, on
               })}
             </div>
             {/* rows */}
-            {rows.length === 0 && <div className="p-4 text-sm text-char/60">Tidak ada langkah yang dijadwalkan bulan ini 🌤️</div>}
+            {rows.length === 0 && <div className="p-4 text-sm text-char/60">Tidak ada langkah yang dijadwalkan bulan ini </div>}
             {rows.map(({ p, stages }) => (
               <div key={p.id} className="border-b border-line last:border-0">
                 <div className="flex bg-tint2/60">
@@ -117,7 +117,7 @@ export function TimelineMonth({ projects, categories, today, month, setMonth, on
                   </div>
                   <div className="relative flex-1">
                     {p.targetLaunch && p.targetLaunch >= s0 && p.targetLaunch <= e0 && (
-                      <div className="absolute top-1 text-[13px]" style={{ left: col(p.targetLaunch) * W + W / 2 - 7 }} title="Target launch">🚀</div>)}
+                      <div className="absolute top-1 text-[13px]" style={{ left: col(p.targetLaunch) * W + W / 2 - 7 }} title="Target launch"></div>)}
                   </div>
                 </div>
                 {stages.map((s) => {
@@ -131,7 +131,7 @@ export function TimelineMonth({ projects, categories, today, month, setMonth, on
                     <div key={s.n} className="flex">
                       <button className="sticky left-0 z-10 shrink-0 border-r border-line bg-card px-2 py-1 text-left" style={{ width: LW }}
                         onClick={() => onEdit?.(p, s.n)} disabled={!onEdit}>
-                        <span className={present ? 'text-[13px]' : 'text-[12px]'}>{STAGE[s.n - 1].emoji}</span>
+                        <span className="mr-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-black/[0.07] text-[9px] font-bold text-char/60">{s.n}</span>
                         <span className={`ml-1 font-semibold ${present ? 'text-[12.5px]' : 'text-[11px]'}`}>{STAGE[s.n - 1].santai}</span>
                         {s.state === 'done' && <span className="ml-1 text-[10px] font-bold text-hijau">✓</span>}
                         {s.state === 'in_progress' && <span className={`ml-1 text-[10px] font-bold ${late ? 'text-bata' : 'text-amber'}`}>●</span>}
@@ -165,7 +165,7 @@ export function TimelineMonth({ projects, categories, today, month, setMonth, on
           <span className="flex items-center gap-1"><i className="inline-block h-1.5 w-5 rounded bg-hijau" />Aktual</span>
           <span className="flex items-center gap-1"><i className="inline-block h-1.5 w-5 rounded bg-bata" />Lewat jadwal</span>
           <span className="flex items-center gap-1"><i className="inline-block h-2.5 w-2.5 rotate-45 border-2 border-bata" />Titik keputusan</span>
-          <span>🚀 Target launch</span>
+          <span>Target launch</span>
           <span className="flex items-center gap-1"><i className="inline-block h-3 w-[2px] bg-bata" />Hari ini</span>
         </div>
       </div>
@@ -182,7 +182,7 @@ export function TimelineMonth({ projects, categories, today, month, setMonth, on
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className={`${present ? 'text-[14px]' : 'text-[13px]'} font-semibold`}>
-                    {(a.kind === 'gate' || a.kind === 'gatestart') && <span className="mr-1 text-bata">◆</span>}{a.kind === 'launch' && <span className="mr-1">🚀</span>}{a.text}</div>
+                    {(a.kind === 'gate' || a.kind === 'gatestart') && <span className="mr-1 text-bata">◆</span>}{a.text}</div>
                   {a.items.map((it, j) => <div key={j} className="text-[11.5px] text-char/65">{it.p.nama} · {it.p.kode}{it.note ? ` · ${it.note}` : ''}</div>)}
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-1">

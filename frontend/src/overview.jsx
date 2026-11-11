@@ -1,11 +1,10 @@
 import React, { useState } from 'react'
-import { Bold, Empty, Pill, Progress, Section, StatusPill, Stepper, Tile, fmtPeriod, fmtTgl, slaText, BULAN, ROMAN, STAGE, CAT } from './ui.jsx'
+import { Bold, Empty, Pill, Progress, Section, StatusPill, Stepper, Tile, CatBadge, CountUp, fmtPeriod, fmtTgl, slaText, BULAN, ROMAN, STAGE, CAT } from './ui.jsx'
 
 export function Takeaway({ text }) {
   return (
-    <div className="mb-5 flex gap-3 rounded-2xl bg-[#FFF4D6] p-3.5">
-      <div className="text-2xl leading-none">📣</div>
-      <div className="text-[14.5px] leading-snug"><Bold text={text} /></div>
+    <div className="anim-in mb-6 rounded-2xl border-l-4 border-bata bg-card p-4 text-[14.5px] leading-relaxed shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+      <Bold text={text} />
     </div>
   )
 }
@@ -14,12 +13,12 @@ export function Tiles({ s, onTile }) {
   const nl = s.nextLaunch
   return (
     <div className="mb-7 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
-      <Tile emoji="🏃" label="Proyek berjalan" value={s.activeProjects} sub={s.atRisk || s.blocked ? `${s.atRisk + s.blocked} perlu perhatian` : 'Semua terpantau'} onClick={() => onTile?.('aktif')} />
-      <Tile emoji="✅" tone="green" label="Sesuai jadwal" value={s.onTrackPct === null ? '-' : `${s.onTrackPct}%`} sub={`${s.onTrack} dari ${s.started} proyek`} onClick={() => onTile?.('aktif')} />
-      <Tile emoji="🐢" tone={s.overSla ? 'red' : 'cream'} label="Telat jadwal" value={s.overSla} sub={s.overSla ? 'Ketuk untuk lihat' : 'Tidak ada yang telat'} onClick={() => onTile?.('sla')} />
-      <Tile emoji="🗳️" tone={s.waitingDecision ? 'amber' : 'cream'} label="Tunggu keputusan" value={s.waitingDecision} sub="oleh PID Head" onClick={() => onTile?.('keputusan')} />
-      <Tile emoji="🚀" tone="blue" label="Launch berikutnya" value={nl ? `${nl.daysTo} hr` : '-'} sub={nl ? nl.nama : 'Belum ada target'} onClick={() => nl && onTile?.('next', nl.id)} />
-      <Tile emoji="🎉" tone="purple" label={`Sudah launch ${new Date().getFullYear()}`} value={`${s.launchesYtd}`} sub={`target ${s.launchTargetYtd} menu/tahun`} />
+      <Tile i={0} label="Proyek berjalan" value={s.activeProjects} sub={s.atRisk || s.blocked ? `${s.atRisk + s.blocked} perlu perhatian` : 'Semua terpantau'} onClick={() => onTile?.('aktif')} />
+      <Tile i={1} tone="green" label="Sesuai jadwal" value={s.onTrackPct === null ? '-' : `${s.onTrackPct}%`} sub={`${s.onTrack} dari ${s.started} proyek`} onClick={() => onTile?.('aktif')} />
+      <Tile i={2} tone={s.overSla ? 'red' : 'cream'} label="Telat jadwal" value={s.overSla} sub={s.overSla ? 'Ketuk untuk lihat' : 'Tidak ada yang telat'} onClick={() => onTile?.('sla')} />
+      <Tile i={3} tone={s.waitingDecision ? 'amber' : 'cream'} label="Tunggu keputusan" value={s.waitingDecision} sub="oleh PID Head" onClick={() => onTile?.('keputusan')} />
+      <Tile i={4} tone="blue" label="Launch berikutnya" value={nl ? `${nl.daysTo} hr` : '-'} sub={nl ? nl.nama : 'Belum ada target'} onClick={() => nl && onTile?.('next', nl.id)} />
+      <Tile i={5} tone="purple" label={`Sudah launch ${new Date().getFullYear()}`} value={`${s.launchesYtd}`} sub={`target ${s.launchTargetYtd} menu/tahun`} />
     </div>
   )
 }
@@ -33,7 +32,7 @@ export function LaunchCalendar({ slots, categories, order, today, onSlot, onDele
   }
   const [sel, setSel] = useState(null)
   return (
-    <Section emoji="📅" title="Kalender Launch" sub="Kapan menu baru direncanakan keluar, 12 bulan ke depan">
+    <Section title="Kalender Launch" sub="Kapan menu baru direncanakan keluar, 12 bulan ke depan">
       <div className="card overflow-hidden">
         <div className="no-scrollbar overflow-x-auto">
           <table className="w-full min-w-[640px] border-collapse text-[11px]">
@@ -46,7 +45,7 @@ export function LaunchCalendar({ slots, categories, order, today, onSlot, onDele
             <tbody>
               {order.map((cat) => (
                 <tr key={cat} className="border-b border-line last:border-0">
-                  <td className="sticky left-0 z-10 bg-card px-2 py-2.5 font-semibold leading-tight"><span className="mr-1">{CAT[cat].emoji}</span>{categories[cat].label}<div className="text-[9.5px] font-normal text-char/55">{categories[cat].cadence}</div></td>
+                  <td className="sticky left-0 z-10 bg-card px-2 py-2.5 font-semibold leading-tight">{categories[cat].label}<div className="text-[9.5px] font-normal text-char/55">{categories[cat].cadence}</div></td>
                   {months.map((m) => {
                     const ss = slots.filter((s) => s.category === cat && s.period === m)
                     return (
@@ -109,7 +108,7 @@ export function ProjectCard({ p, stages, categories, onClick }) {
   return (
     <button onClick={onClick} className="card block w-full overflow-hidden text-left transition active:scale-[.99]">
       <div className="flex items-start gap-3 p-3.5 pb-2">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-[22px]" style={{ background: cat.soft }}>{cat.emoji}</div>
+        <CatBadge cat={p.category} />
         <div className="min-w-0 flex-1">
           <div className="line-clamp-2 text-[16px] font-extrabold leading-tight">{p.nama}</div>
           <div className="mt-0.5 truncate text-[12px] text-char/55">{categories[p.category].label}{(p.subType || []).length ? ` · ${p.subType.join(', ')}` : ''}{p.kandidatNames?.length ? ` · ${p.kandidatNames.slice(0, 3).join(', ')}` : ''}</div>
@@ -123,8 +122,8 @@ export function ProjectCard({ p, stages, categories, onClick }) {
         </div>
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0 text-[13px]">
-            {done ? <span className="font-semibold">🎉 Sudah launch</span> : <>
-              <span className="text-char/55">Sekarang: </span><span className="font-bold">{st.emoji} {st.santai}</span>
+            {done ? <span className="font-semibold">Sudah launch</span> : <>
+              <span className="text-char/55">Sekarang: </span><span className="font-bold">{st.santai}</span>
               {p.waitingDecision && <span className="ml-1 rounded-full bg-[#FBEBD2] px-2 py-0.5 text-[11px] font-bold text-amber">tunggu keputusan</span>}
             </>}
           </div>
@@ -132,8 +131,8 @@ export function ProjectCard({ p, stages, categories, onClick }) {
         </div>
       </div>
       <div className="flex items-center justify-between border-t border-black/[0.05] bg-black/[0.02] px-3.5 py-2 text-[11.5px] text-char/60">
-        <span>🚀 Launch {p.targetLaunch ? fmtTgl(p.targetLaunch) : 'belum ditentukan'}{f.daysToLaunch != null && f.daysToLaunch >= 0 && !done ? ` · ${f.daysToLaunch} hari lagi` : ''}</span>
-        {f.risikoLaunch && <span className="font-bold text-amber">bisa mundur ⚠️</span>}
+        <span>Launch {p.targetLaunch ? fmtTgl(p.targetLaunch) : 'belum ditentukan'}{f.daysToLaunch != null && f.daysToLaunch >= 0 && !done ? ` · ${f.daysToLaunch} hari lagi` : ''}</span>
+        {f.risikoLaunch && <span className="font-bold text-amber">bisa mundur </span>}
         {f.stalled && !f.risikoLaunch && <span className="font-bold text-amber">lama tak ada update</span>}
       </div>
     </button>
@@ -143,18 +142,18 @@ export function ProjectCard({ p, stages, categories, onClick }) {
 export function PipelineByCategory({ projects, stages, categories, order, onOpen, showDone = false }) {
   const [closed, setClosed] = useState({})
   return (
-    <Section emoji="🧭" title="Semua Proyek" sub="Dikelompokkan per kategori menu">
+    <Section title="Semua Proyek" sub="Dikelompokkan per kategori menu">
       {order.map((cat) => {
         const ps = projects.filter((p) => p.category === cat && (showDone || !['done', 'dropped'].includes(p.status)))
         const c = categories[cat]
         return (
           <div key={cat} className="mb-3">
             <button onClick={() => setClosed({ ...closed, [cat]: !closed[cat] })} className="mb-2 flex w-full items-center justify-between border-b border-line pb-1.5">
-              <span className="text-[15px] font-extrabold"><span className="mr-1.5">{CAT[cat].emoji}</span>{c.label} <span className="text-[12px] font-normal text-char/50">· {c.cadence}</span></span>
+              <span className="text-[15px] font-extrabold">{c.label} <span className="text-[12px] font-normal text-char/50">· {c.cadence}</span></span>
               <span className="rounded-full bg-black/5 px-2 py-0.5 text-xs font-bold text-char/60">{ps.length} {closed[cat] ? '▸' : '▾'}</span>
             </button>
             {!closed[cat] && (ps.length ? <div className="grid gap-2.5 md:grid-cols-2">{ps.map((p) => <ProjectCard key={p.id} p={p} stages={stages} categories={categories} onClick={() => onOpen?.(p)} />)}</div>
-              : <Empty emoji={CAT[cat].emoji}>Belum ada proyek di kategori ini</Empty>)}
+              : <Empty>Belum ada proyek di kategori ini</Empty>)}
           </div>
         )
       })}
@@ -165,7 +164,7 @@ export function PipelineByCategory({ projects, stages, categories, order, onOpen
 export function Funnel({ rows }) {
   const max = Math.max(1, ...rows.map((r) => r.count))
   return (
-    <Section emoji="🔻" title="Dari Ide sampai Launch" sub="Berapa ide yang bertahan di tiap langkah (12 bulan terakhir)">
+    <Section title="Dari Ide sampai Launch" sub="Berapa ide yang bertahan di tiap langkah (12 bulan terakhir)">
       <div className="card p-3">
         {rows.map((r, i) => (
           <div key={r.label} className="mb-2 last:mb-0">
@@ -184,7 +183,7 @@ export function SlaCompliance({ rows: allRows, byCat, categories, order }) {
   const has = rows.some((r) => r.n > 0)
   const max = Math.max(1, ...rows.map((r) => Math.max(r.avgActual || 0, r.avgSla || 0)))
   return (
-    <Section emoji="⏱️" title="Ketepatan Waktu" sub="Rata-rata lama tiap langkah dibanding batas waktunya">
+    <Section title="Ketepatan Waktu" sub="Rata-rata lama tiap langkah dibanding batas waktunya">
       <div className="card p-3">
         {byCat && <select className="inp mb-3 py-2" value={cat} onChange={(e) => setCat(e.target.value)}>
           <option value="">Semua kategori</option>{order.map((k) => <option key={k} value={k}>{categories[k].label}</option>)}</select>}
@@ -193,7 +192,7 @@ export function SlaCompliance({ rows: allRows, byCat, categories, order }) {
           const over = r.avgActual != null && r.avgSla != null && r.avgActual > r.avgSla
           return (
             <div key={r.stage} className="mb-2 grid grid-cols-[34px_1fr_64px] items-center gap-2 last:mb-0">
-              <span className="text-[16px]">{STAGE[r.stage - 1].emoji}</span>
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-black/[0.06] text-[11px] font-bold text-char/60">{r.stage}</span>
               <div>
                 <div className="truncate text-[11.5px] text-char/70">{STAGE[r.stage - 1].santai}</div>
                 <div className="relative h-2.5 rounded-full bg-tint2">
@@ -213,9 +212,9 @@ export function SlaCompliance({ rows: allRows, byCat, categories, order }) {
 
 export function LaunchScorecard({ sc, categories, onOpen }) {
   if (!sc) return null
-  const V = { hit: ['🎯 Laris', '#2F6B4A'], miss: ['📉 Di bawah target', '#B42F27'], berjalan: ['⏳ Berjalan', '#B8741A'], 'belum ada data': ['Belum ada data', '#8A8378'] }
+  const V = { hit: ['Laris', '#2F6B4A'], miss: ['Di bawah target', '#B42F27'], berjalan: ['Berjalan', '#B8741A'], 'belum ada data': ['Belum ada data', '#8A8378'] }
   return (
-    <Section emoji="🏆" title="Hasil Setelah Launch" sub="Penjualan 4 minggu pertama dibanding target">
+    <Section title="Hasil Setelah Launch" sub="Penjualan 4 minggu pertama dibanding target">
       <div className="card p-3">
         <div className="mb-3 grid grid-cols-3 gap-2 text-center">
           <div className="rounded-xl bg-tint2/70 p-2"><div className="text-[10.5px] text-char/60">Sudah launch</div><div className="text-lg font-extrabold text-bata">{sc.overall.launched}</div></div>
@@ -233,7 +232,7 @@ export function LaunchScorecard({ sc, categories, onOpen }) {
             <div className="min-w-0"><div className="truncate font-semibold">{r.nama}</div><div className="text-[11px] text-char/60">{categories[r.category].label} · launch {r.launchedAt ? fmtTgl(r.launchedAt) : '-'} · {r.weeksFilled}/4 minggu</div></div>
             <div className="shrink-0 text-right"><div className="font-bold">{r.pct == null ? '-' : `${r.pct}%`}</div><Pill color={V[r.verdict][1]}>{V[r.verdict][0]}</Pill></div>
           </button>
-        )) : <Empty emoji="🚀">Belum ada menu yang launch.</Empty>}
+        )) : <Empty>Belum ada menu yang launch.</Empty>}
       </div>
     </Section>
   )

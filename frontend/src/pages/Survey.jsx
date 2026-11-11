@@ -55,7 +55,7 @@ export default function Survey() {
       <div className="mt-1 text-sm">Bantu kami memilih menu baru {s?.judul ? `(${s.judul})` : ''}{s?.lokasi ? ` · ${s.lokasi}` : ''}</div>
     </div>
   )
-  if (done) return <div className="min-h-screen">{Header}<div className="mx-auto max-w-md p-6 text-center"><div className="text-5xl">🙏</div><div className="mt-3 text-lg font-bold text-bata">{done}</div><p className="mt-2 text-sm text-char/70">Penilaian Anda sudah kami terima.</p></div></div>
+  if (done) return <div className="min-h-screen">{Header}<div className="mx-auto max-w-md p-6 text-center"><div className="text-5xl"></div><div className="mt-3 text-lg font-bold text-bata">{done}</div><p className="mt-2 text-sm text-char/70">Penilaian Anda sudah kami terima.</p></div></div>
   if (!s) return <div className="min-h-screen">{Header}<div className="p-6 text-center text-sm text-char/70">{err || 'Memuat…'}</div></div>
   if (!s.open) return <div className="min-h-screen">{Header}<div className="mx-auto max-w-md p-6 text-center"><div className="text-lg font-bold text-bata">Survey sudah ditutup</div><p className="mt-2 text-sm text-char/70">{s.reason}</p></div></div>
 

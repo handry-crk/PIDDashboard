@@ -27,3 +27,23 @@ input, select, textarea { font-size: 16px; }
   .card.agenda-card { break-inside: auto; }
   .agenda-row { break-inside: avoid; }
 }
+
+/* ---------- motion ---------- */
+@keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes sheetUp { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes fadeBg { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pulseRing { 0% { transform: scale(1); opacity: .45; } 70% { transform: scale(1.7); opacity: 0; } 100% { opacity: 0; } }
+@keyframes fillX { from { width: 0; } }
+@keyframes toastIn { from { transform: translateY(16px) scale(.98); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes shimmer { 0% { background-position: -300px 0; } 100% { background-position: 300px 0; } }
+.anim-in { animation: fadeUp .45s cubic-bezier(.2,.7,.2,1) both; }
+.sheet-up { animation: sheetUp .32s cubic-bezier(.2,.8,.2,1) both; }
+.fade-bg { animation: fadeBg .2s ease-out both; }
+.pulse-ring { animation: pulseRing 1.8s ease-out infinite; }
+.step-fill { animation: fillX .6s ease-out both; }
+.toast-in { animation: toastIn .28s cubic-bezier(.2,.8,.2,1) both; }
+.page-in { animation: fadeUp .35s ease-out both; }
+.skeleton { background: linear-gradient(90deg, rgba(0,0,0,.05) 0%, rgba(0,0,0,.09) 40%, rgba(0,0,0,.05) 80%); background-size: 600px 100%; animation: shimmer 1.2s linear infinite; border-radius: 16px; }
+@media (prefers-reduced-motion: reduce) {
+  .anim-in, .sheet-up, .fade-bg, .pulse-ring, .step-fill, .toast-in, .page-in, .skeleton { animation: none !important; }
+}

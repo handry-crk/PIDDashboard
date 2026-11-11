@@ -118,7 +118,8 @@ function Shell() {
   }, [authed, load])
 
   if (!authed) return <Login onLogin={() => { setAuthed(true); go('#/beranda') }} />
-  if (!state) return <div className="flex min-h-screen items-center justify-center text-sm text-char/60">{err || 'Memuat dashboard…'}</div>
+  if (!state) return err ? <div className="flex min-h-screen items-center justify-center text-sm text-char/60">{err}</div>
+    : <div className="mx-auto max-w-md space-y-3 p-4 pt-8"><div className="skeleton h-10 w-40" /><div className="skeleton h-20" /><div className="grid grid-cols-2 gap-3"><div className="skeleton h-24" /><div className="skeleton h-24" /><div className="skeleton h-24" /><div className="skeleton h-24" /></div><div className="skeleton h-40" /></div>
 
   const [hpath, hquery = ''] = hash.replace('#', '').split('?')
   const [, page, id] = hpath.split('/')
@@ -179,7 +180,7 @@ function Shell() {
         </div>
       </nav>
 
-      <main className="mx-auto max-w-6xl px-4 pt-4">{body}</main>
+      <main key={hpath} className="page-in mx-auto max-w-6xl px-4 pt-4">{body}</main>
 
       {/* mobile bottom nav */}
       <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-line bg-card pb-[env(safe-area-inset-bottom)] sm:hidden print:!hidden">
