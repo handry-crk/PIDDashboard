@@ -249,11 +249,29 @@ function Akses({ state, reload, mode, domain, saveSettings }) {
   useEffect(() => setD(domain), [domain])
   const toast = useToast()
   const pending = state.members.filter((m) => m.pending)
+  const resets = state.members.filter((m) => m.active && m.resetRequestedAt)
   const [f, setF] = useState(null)
+  const [code, setCode] = useState(null)
+  const sendCode = (m) => api(`/api/members/${m.id}/reset-code`, { method: 'POST' }).then((r) => { setCode({ name: m.name, ...r }); reload() }).catch((e) => toast(e.message, 'err'))
   const act = (p, opt, msg) => api(p, opt).then(() => { toast(msg); reload() }).catch((e) => toast(e.message, 'err'))
   const holder = (k) => ['pid_head', 'pid_supervisor'].includes(k) && state.members.find((x) => x.active && x.role === k)
   return (
-    <Section fold defaultOpen={pending.length > 0} title={`Akses & pendaftaran${pending.length ? ` · ${pending.length} menunggu` : ''}`} sub="Siapa yang boleh masuk dashboard">
+    <Section fold defaultOpen={pending.length + resets.length > 0} title={`Akses & pendaftaran${pending.length + resets.length ? ` · ${pending.length + resets.length} menunggu` : ''}`} sub="Siapa yang boleh masuk dashboard">
+      {code && <div className="card anim-in mb-3 border-hijau p-3">
+        <div className="text-sm">Kode reset untuk <b>{code.name}</b></div>
+        <div className="my-2 text-3xl font-extrabold tracking-[8px] text-bata">{code.code}</div>
+        <div className="text-xs text-char/65">{code.sentTo.length ? `Sudah dikirim ke ${code.sentTo.join(' dan ')}.` : 'WhatsApp/email tidak terkirim, sampaikan kode ini langsung.'} Berlaku {code.minutes} menit. Di halaman login: Lupa PIN → Sudah punya kode.</div>
+        <button className="btn-g mt-2 w-full border border-line text-xs" onClick={() => setCode(null)}>Tutup</button>
+      </div>}
+      {resets.length > 0 && <div className="mb-3">
+        <div className="mb-2 text-[13px] font-bold">Minta reset PIN</div>
+        {resets.map((m) => (
+          <div key={m.id} className="card anim-in mb-2 flex items-center justify-between gap-2 border-amber p-3">
+            <div className="min-w-0"><div className="truncate font-bold">{m.name}</div><div className="text-xs text-char/60">{ROLES[m.role]} · {fmtWhen(m.resetRequestedAt)}</div></div>
+            <button className="btn-p px-4 text-xs" onClick={() => sendCode(m)}>Kirim kode</button>
+          </div>
+        ))}
+      </div>}
       {pending.length > 0 && <div className="mb-3">
         <div className="mb-2 text-[13px] font-bold">Pendaftar baru</div>
         {pending.map((m, i) => (

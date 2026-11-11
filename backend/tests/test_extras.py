@@ -302,3 +302,44 @@ def test_email_domain(c):
     assert dup.status_code == 409
     assert c.put("/api/settings", headers=H(th), json={"emailDomain": "bukan domain"}).status_code == 400
     assert c.put("/api/settings", headers=H(th), json={"emailDomain": "@crk.id"}).json()["emailDomain"] == "crk.id"
+
+
+def test_forgot_pin(c, monkeypatch):
+    import re as _re
+    db = dbmod.get_db()
+    sent = []
+    monkeypatch.setattr(WA, "_post", lambda url, headers, data: (sent.append(data), type("R", (), {"status_code": 200, "json": lambda s: {"status": True}})())[1])
+    th = c.post("/api/auth/admin-login", json={"pin": "1234"}).json()["token"]
+    c.put("/api/settings", headers=H(th), json={"waToken": "tok"})
+    head = db.members.find_one({"role": "pid_head", "active": True})
+    db.members.update_one({"id": head["id"]}, {"$set": {"phone": "081111111111"}})
+    # PID Head: self-service code via WhatsApp (works even if WA notifications are off)
+    r = c.post("/api/auth/forgot", json={"memberId": head["id"]}).json()
+    assert r["mode"] == "code" and "0811****11" in r["message"] and "081111111111" not in r["message"]
+    code = _re.search(r"\*(\d{6})\*", sent[-1]["message"]).group(1)
+    assert c.post("/api/auth/forgot", json={"memberId": head["id"]}).status_code == 429
+    assert c.post("/api/auth/reset", json={"memberId": head["id"], "code": "000000" if code != "000000" else "111111", "pin": "9999"}).status_code == 401
+    ok = c.post("/api/auth/reset", json={"memberId": head["id"], "code": code, "pin": "9999"})
+    assert ok.status_code == 200 and ok.json()["token"]
+    assert c.get("/api/state", headers=H(th)).status_code == 401  # reset logs out old sessions
+    th = ok.json()["token"]
+    assert c.post("/api/auth/login", json={"memberId": head["id"], "pin": "9999"}).status_code == 200
+    assert c.post("/api/auth/reset", json={"memberId": head["id"], "code": code, "pin": "8888"}).status_code == 400  # one-time
+    # Staff: request goes to admin, no code is issued
+    st = c.post("/api/members", headers=H(th), json={"name": "Lupa", "role": "pid_staff", "pin": "5555", "phone": "082222222222"}).json()
+    r = c.post("/api/auth/forgot", json={"memberId": st["id"]}).json()
+    assert r["mode"] == "request" and not db.members.find_one({"id": st["id"]}).get("resetCodeHash")
+    mem = next(m for m in c.get("/api/state", headers=H(th)).json()["members"] if m["id"] == st["id"])
+    assert mem["resetRequestedAt"]
+    staff_tok = c.post("/api/auth/login", json={"memberId": st["id"], "pin": "5555"}).json()["token"]
+    assert c.post(f"/api/members/{st['id']}/reset-code", headers=H(staff_tok)).status_code == 403
+    rc = c.post(f"/api/members/{st['id']}/reset-code", headers=H(th)).json()
+    assert _re.fullmatch(r"\d{6}", rc["code"]) and rc["sentTo"]
+    assert c.post("/api/auth/reset", json={"memberId": st["id"], "code": rc["code"], "pin": "7777"}).status_code == 200
+    assert c.get("/api/state", headers=H(staff_tok)).status_code == 401  # old sessions logged out
+    # brute force limit
+    c.post(f"/api/members/{st['id']}/reset-code", headers=H(th))
+    for _ in range(5):
+        c.post("/api/auth/reset", json={"memberId": st["id"], "code": "abc", "pin": "1212"})
+    r = c.post("/api/auth/reset", json={"memberId": st["id"], "code": "abc", "pin": "1212"})
+    assert r.status_code == 400 and "tidak berlaku" in r.json()["detail"]

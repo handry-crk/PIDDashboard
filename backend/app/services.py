@@ -332,7 +332,7 @@ def build_state(member):
     ensure_slots(settings)
     projects, kandidat = all_projects_enriched(settings)
     slots = slots_enriched(projects, settings)
-    members = [{k: m.get(k) for k in ("id", "name", "role", "email", "phone", "active", "isAdmin", "pending", "createdAt")}
+    members = [{k: m.get(k) for k in ("id", "name", "role", "email", "phone", "active", "isAdmin", "pending", "createdAt", "resetRequestedAt")}
                for m in clean_all(db.members.find({}))]
     return {
         "me": {k: member.get(k) for k in ("id", "name", "role", "email", "phone", "isAdmin")},

@@ -300,6 +300,106 @@ def login(body: dict = Body(...)):
     return {"token": new_session(m["id"]), "member": {k: m[k] for k in ("id", "name", "role", "isAdmin")}}
 
 
+# ---------- Lupa PIN ----------
+# PID Head / Admin: kode 6 digit langsung dikirim ke WhatsApp/email sendiri.
+# Anggota lain: kirim permintaan ke PID Head/Admin -> Admin kirim kode -> anggota buat PIN baru sendiri.
+RESET_TTL_MIN, RESET_MAX_TRY, RESET_COOLDOWN_S = 15, 5, 60
+
+
+def _mask_phone(p):
+    p = re.sub(r"\D", "", p or "")
+    return f"{p[:4]}****{p[-2:]}" if len(p) >= 8 else ""
+
+
+def _mask_email(e):
+    if not e or "@" not in e:
+        return ""
+    u, d = e.split("@", 1)
+    return f"{u[:2]}***@{d}"
+
+
+def _self_reset(m):
+    return m.get("isAdmin") or m.get("role") == "pid_head"
+
+
+def _issue_code(m):
+    """Create a reset code, deliver it via WhatsApp + email. Returns (code, delivered_to list)."""
+    from datetime import datetime, timedelta, timezone
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    exp = (datetime.now(timezone.utc) + timedelta(minutes=RESET_TTL_MIN)).isoformat()
+    get_db().members.update_one({"id": m["id"]}, {"$set": {
+        "resetCodeHash": hash_pin(code), "resetCodeExp": exp, "resetTries": 0, "resetSentAt": D.now_utc_iso()}})
+    text = (f"*PID Dashboard*\nKode reset PIN untuk {m['name']}: *{code}*\n"
+            f"Berlaku {RESET_TTL_MIN} menit. Jangan berikan kode ini ke siapa pun.")
+    to = []
+    if m.get("phone") and WA.send([m["phone"]], text, "pinReset", force=True).get("ok"):
+        to.append(f"WhatsApp {_mask_phone(m['phone'])}")
+    if m.get("email"):
+        r = J.send_email([m["email"]], "Kode reset PIN PID Dashboard", text.replace("*", ""))
+        if r.get("sent"):
+            to.append(f"email {_mask_email(m['email'])}")
+    return code, to
+
+
+@app.post("/api/auth/forgot")
+def forgot_pin(body: dict = Body(...)):
+    from datetime import datetime, timezone
+    db = get_db()
+    m = db.members.find_one({"id": body.get("memberId"), "active": True})
+    if not m or m.get("pending"):
+        raise HTTPException(404, "Nama tidak ditemukan atau tidak aktif")
+    m = clean(m)
+    last = m.get("resetSentAt") or m.get("resetRequestedAt")
+    if last and (datetime.now(timezone.utc) - datetime.fromisoformat(last)).total_seconds() < RESET_COOLDOWN_S:
+        raise HTTPException(429, "Tunggu 1 menit sebelum meminta lagi")
+    if _self_reset(m):
+        _, to = _issue_code(m)
+        if not to:
+            db.members.update_one({"id": m["id"]}, {"$unset": {"resetCodeHash": "", "resetCodeExp": ""}})
+            raise HTTPException(400, "Kode tidak bisa dikirim: nomor WhatsApp/email belum terisi atau WhatsApp belum aktif. "
+                                     "Gunakan PIN Admin (link darurat) lalu reset PIN dari menu Anggota tim")
+        return {"mode": "code", "message": f"Kode reset dikirim ke {' dan '.join(to)}"}
+    db.members.update_one({"id": m["id"]}, {"$set": {"resetRequestedAt": D.now_utc_iso()}})
+    WA.send_async(WA.phones(["pid_head"]) + [x.get("phone") for x in db.members.find({"isAdmin": True, "active": True})],
+                  f"*Permintaan reset PIN*\n{m['name']} lupa PIN.\nBuka Saya → Akses & pendaftaran, lalu tekan *Kirim kode*.\n{WA.link()}",
+                  "decisionRequest")
+    return {"mode": "request", "message": "Permintaan terkirim ke PID Head/Admin. Anda akan menerima kode reset lewat WhatsApp atau langsung dari Admin."}
+
+
+@app.post("/api/auth/reset")
+def reset_with_code(body: dict = Body(...)):
+    from datetime import datetime, timezone
+    db = get_db()
+    m = db.members.find_one({"id": body.get("memberId"), "active": True})
+    pin, code = str(body.get("pin", "")), str(body.get("code", "")).strip()
+    if not m or not m.get("resetCodeHash"):
+        raise HTTPException(400, "Belum ada kode reset. Tekan Lupa PIN terlebih dahulu")
+    m = clean(m)
+    if datetime.now(timezone.utc) > datetime.fromisoformat(m["resetCodeExp"]) or m.get("resetTries", 0) >= RESET_MAX_TRY:
+        db.members.update_one({"id": m["id"]}, {"$unset": {"resetCodeHash": "", "resetCodeExp": ""}})
+        raise HTTPException(400, "Kode sudah tidak berlaku. Minta kode baru")
+    if not verify_pin(code, m["resetCodeHash"]):
+        db.members.update_one({"id": m["id"]}, {"$inc": {"resetTries": 1}})
+        raise HTTPException(401, f"Kode salah. Sisa percobaan {RESET_MAX_TRY - m.get('resetTries', 0) - 1}")
+    if not re.fullmatch(r"\d{4,6}", pin):
+        raise HTTPException(400, "PIN baru harus 4–6 digit angka")
+    db.members.update_one({"id": m["id"]}, {"$set": {"pinHash": hash_pin(pin), "failedPins": 0, "lockedUntil": None},
+                                           "$unset": {"resetCodeHash": "", "resetCodeExp": "", "resetTries": "", "resetRequestedAt": ""}})
+    db.sessions.delete_many({"memberId": m["id"]})
+    return {"token": new_session(m["id"]), "member": {k: m[k] for k in ("id", "name", "role", "isAdmin")}}
+
+
+@app.post("/api/members/{mid}/reset-code")
+def admin_send_reset_code(mid: str, me=Depends(current_member)):
+    require(me.get("isAdmin") or is_head(me), "Hanya PID Head/Admin yang dapat mengirim kode reset")
+    m = get_db().members.find_one({"id": mid, "active": True})
+    if not m:
+        raise HTTPException(404, "Anggota tidak ditemukan")
+    code, to = _issue_code(clean(m))
+    get_db().members.update_one({"id": mid}, {"$unset": {"resetRequestedAt": ""}})
+    return {"code": code, "sentTo": to, "minutes": RESET_TTL_MIN}
+
+
 @app.post("/api/auth/admin-login")
 def admin_login(body: dict = Body(...)):
     db = get_db()
@@ -1194,7 +1294,8 @@ def reset_pin(mid: str, body: dict = Body(...), me=Depends(current_member)):
     pin = str(body.get("pin", ""))
     if not re.fullmatch(r"\d{4,6}", pin):
         raise HTTPException(400, "PIN baru harus 4–6 digit angka")
-    get_db().members.update_one({"id": mid}, {"$set": {"pinHash": hash_pin(pin), "failedPins": 0, "lockedUntil": None}})
+    get_db().members.update_one({"id": mid}, {"$set": {"pinHash": hash_pin(pin), "failedPins": 0, "lockedUntil": None},
+                                              "$unset": {"resetRequestedAt": "", "resetCodeHash": "", "resetCodeExp": ""}})
     return {"ok": True}
 
 
