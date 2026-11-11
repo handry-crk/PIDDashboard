@@ -5,7 +5,8 @@ import { Field, Logo } from '../ui.jsx'
 const ROLES = { pid_head: 'PID Head', pid_supervisor: 'PID Supervisor', pid_staff: 'PID Staff / R&D', viewer: 'Viewer' }
 
 export default function Login({ onLogin }) {
-  const [mode, setMode] = useState('login')
+  // Masuk pakai PIN Admin hanya untuk darurat (mis. PID Head lupa PIN): buka /?darurat
+  const [mode, setMode] = useState(() => (new URLSearchParams(window.location.search).has('darurat') ? 'admin' : 'login'))
   const [members, setMembers] = useState([])
   const [f, setF] = useState({ memberId: '', pin: '', name: '', role: 'pid_supervisor', email: '', phone: '' })
   const [err, setErr] = useState('')
@@ -17,7 +18,7 @@ export default function Login({ onLogin }) {
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value })
 
   useEffect(() => {
-    api('/api/auth/members').then((m) => { setMembers(m); if (!m.length) setMode('register') }).catch(() => {})
+    api('/api/auth/members').then((m) => { setMembers(m); if (!m.length) setMode((x) => (x === 'admin' ? x : 'register')) }).catch(() => {})
     api('/api/auth/roles').then((r) => {
       setAvail(r.roles); setRegMode(r.mode || 'approval'); setDom(r.emailDomain || '')
       setF((o) => (r.roles[o.role]?.available ? o : { ...o, role: Object.keys(r.roles).find((k) => r.roles[k].available) || 'viewer' }))
@@ -46,8 +47,8 @@ export default function Login({ onLogin }) {
         <div className="mt-2 text-[15px] text-cream/85">Pantau menu baru dari ide sampai launch</div>
       </div>
       <form onSubmit={submit} className="mx-auto -mt-5 w-full max-w-md flex-1 rounded-t-2xl bg-cream px-6 pt-6">
-        <div className="mb-5 grid grid-cols-3 rounded-lg border border-line p-1 text-sm font-semibold">
-          {[['login', 'Masuk'], ['register', 'Daftar'], ['admin', 'Admin']].map(([k, l]) => (
+        <div className={`mb-5 grid ${mode === 'admin' ? 'grid-cols-3' : 'grid-cols-2'} rounded-lg border border-line p-1 text-sm font-semibold`}>
+          {[['login', 'Masuk'], ['register', 'Daftar'], ...(mode === 'admin' ? [['admin', 'Admin']] : [])].map(([k, l]) => (
             <button type="button" key={k} onClick={() => { setMode(k); setErr('') }} className={`min-h-[40px] rounded-md ${mode === k ? 'bg-bata text-cream' : 'text-char/70'}`}>{l}</button>
           ))}
         </div>

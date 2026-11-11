@@ -445,7 +445,7 @@ function AdminPin() {
   const toast = useToast()
   const [pin, setPin] = useState('')
   return (
-    <Section fold defaultOpen={false} title="PIN Admin" sub="PIN cadangan untuk masuk sebagai Admin">
+    <Section fold defaultOpen={false} title="PIN Admin" sub="Cadangan kalau PID Head lupa PIN. Masuk lewat link /?darurat">
       <div className="card grid grid-cols-[1fr_auto] gap-2 p-3">
         <input className="inp tracking-[6px]" inputMode="numeric" maxLength={6} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))} placeholder="PIN baru" />
         <button className="btn-p" disabled={!/^\d{4,6}$/.test(pin)} onClick={() => api('/api/settings/admin-pin', { method: 'PUT', body: { pin } }).then(() => { toast('Admin PIN diubah'); setPin('') }).catch((e) => toast(e.message, 'err'))}>Simpan</button>
