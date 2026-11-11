@@ -42,7 +42,7 @@ def setup_project(c, th, cat="online_food", launch="2027-03-05", nama="OF Mar 20
 
 
 def test_vendor_price_history(c):
-    th = c.post("/api/auth/register", json={"name": "Handry", "role": "pid_head", "pin": "1111", "phone": "081111111111"}).json()["token"]
+    th = c.post("/api/auth/register", json={"name": "Handry", "email": "handry@citarasakuliner.com", "role": "pid_head", "pin": "1111", "phone": "081111111111"}).json()["token"]
     c.put("/api/settings", headers=H(th), json={"registrationMode": "open"})
     sent = []
     WA._post = lambda url, headers, data: (sent.append(data), type("R", (), {"status_code": 200, "json": lambda s: {"status": True}})())[1]
@@ -219,7 +219,7 @@ def test_reset_data(c):
     th = c.post("/api/auth/admin-login", json={"pin": "1234"}).json()["token"]
     st = c.get("/api/state", headers=H(th)).json()
     assert st["projects"] and c.get("/api/vendors", headers=H(th)).json()
-    sup = c.post("/api/auth/register", json={"name": "Sinta", "role": "pid_supervisor", "pin": "2222"}).json()["token"]
+    sup = c.post("/api/auth/register", json={"name": "Sinta", "email": "sinta@citarasakuliner.com", "role": "pid_supervisor", "pin": "2222"}).json()["token"]
     assert c.post("/api/admin/reset", headers=H(sup), json={"scope": "proyek", "confirm": "RESET", "pin": "2222"}).status_code == 403
     assert c.post("/api/admin/reset", headers=H(th), json={"scope": "proyek", "confirm": "hapus", "pin": "1111"}).status_code == 400
     assert c.post("/api/admin/reset", headers=H(th), json={"scope": "proyek", "confirm": "RESET", "pin": "9999"}).status_code == 401
@@ -239,9 +239,9 @@ def test_single_head_and_supervisor(c):
     roles = c.get("/api/auth/roles").json()["roles"]
     assert roles["pid_head"]["available"] is False and roles["pid_supervisor"]["holder"] == "Sinta"
     # second supervisor cannot self-register
-    r = c.post("/api/auth/register", json={"name": "Budi", "role": "pid_supervisor", "pin": "3333"})
+    r = c.post("/api/auth/register", json={"name": "Budi", "email": "budi@citarasakuliner.com", "role": "pid_supervisor", "pin": "3333"})
     assert r.status_code == 409 and "Sinta" in r.json()["detail"]
-    budi = c.post("/api/auth/register", json={"name": "Budi", "role": "pid_staff", "pin": "3333"}).json()["member"]
+    budi = c.post("/api/auth/register", json={"name": "Budi", "email": "budi@citarasakuliner.com", "role": "pid_staff", "pin": "3333"}).json()["member"]
     # admin cannot promote Budi while Sinta is active supervisor
     r = c.put(f"/api/members/{budi['id']}", headers=H(th), json={"role": "pid_supervisor"})
     assert r.status_code == 409
@@ -261,7 +261,7 @@ def test_registration_approval(c):
     th = c.post("/api/auth/admin-login", json={"pin": "1234"}).json()["token"]
     c.put("/api/settings", headers=H(th), json={"registrationMode": "approval"})
     assert c.get("/api/auth/roles").json()["mode"] == "approval"
-    r = c.post("/api/auth/register", json={"name": "Orang Asing", "role": "viewer", "pin": "4444"}).json()
+    r = c.post("/api/auth/register", json={"name": "Orang Asing", "email": "orangasing@citarasakuliner.com", "role": "viewer", "pin": "4444"}).json()
     assert r.get("pending") is True and "token" not in r
     # not in login list, cannot log in, cannot see data
     assert all(m["name"] != "Orang Asing" for m in c.get("/api/auth/members").json())
@@ -270,7 +270,7 @@ def test_registration_approval(c):
     assert oa["pending"] is True and oa["active"] is False
     assert c.post("/api/auth/login", json={"memberId": oa["id"], "pin": "4444"}).status_code == 403
     # non-admin cannot approve
-    staff = c.post("/api/members", headers=H(th), json={"name": "Ari", "role": "pid_staff", "pin": "5555"})
+    staff = c.post("/api/members", headers=H(th), json={"name": "Ari", "email": "ari@citarasakuliner.com", "role": "pid_staff", "pin": "5555"})
     assert staff.status_code == 200
     ta = c.post("/api/auth/login", json={"memberId": staff.json()["id"], "pin": "5555"}).json()["token"]
     assert c.post(f"/api/members/{oa['id']}/approve", headers=H(ta)).status_code == 403
@@ -278,12 +278,27 @@ def test_registration_approval(c):
     assert c.post(f"/api/members/{oa['id']}/approve", headers=H(th)).status_code == 200
     assert c.post("/api/auth/login", json={"memberId": oa["id"], "pin": "4444"}).status_code == 200
     # reject removes a pending registration; active members cannot be "rejected"
-    r2 = c.post("/api/auth/register", json={"name": "Spammer", "role": "viewer", "pin": "4444"}).json()
+    r2 = c.post("/api/auth/register", json={"name": "Spammer", "email": "spammer@citarasakuliner.com", "role": "viewer", "pin": "4444"}).json()
     sp = next(m for m in c.get("/api/state", headers=H(th)).json()["members"] if m["name"] == "Spammer")
     assert c.delete(f"/api/members/{sp['id']}", headers=H(th)).status_code == 200
     assert c.delete(f"/api/members/{oa['id']}", headers=H(th)).status_code == 400
     # closed: nobody can self-register
     c.put("/api/settings", headers=H(th), json={"registrationMode": "closed"})
-    r = c.post("/api/auth/register", json={"name": "Lagi", "role": "viewer", "pin": "4444"})
+    r = c.post("/api/auth/register", json={"name": "Lagi", "email": "lagi@citarasakuliner.com", "role": "viewer", "pin": "4444"})
     assert r.status_code == 403 and "ditutup" in r.json()["detail"]
     assert c.put("/api/settings", headers=H(th), json={"registrationMode": "bebas"}).status_code == 400
+
+
+def test_email_domain(c):
+    th = c.post("/api/auth/admin-login", json={"pin": "1234"}).json()["token"]
+    c.put("/api/settings", headers=H(th), json={"registrationMode": "approval", "emailDomain": "citarasakuliner.com"})
+    assert c.get("/api/auth/roles").json()["emailDomain"] == "citarasakuliner.com"
+    for em in ["", "x@gmail.com", "x@citarasakuliner.com.evil.id", "x@fakecitarasakuliner.com"]:
+        r = c.post("/api/auth/register", json={"name": "Luar", "email": em, "role": "viewer", "pin": "4444"})
+        assert r.status_code == 400 and "citarasakuliner.com" in r.json()["detail"], em
+    ok = c.post("/api/auth/register", json={"name": "Dalam", "email": "Dalam@CitarasaKuliner.com", "role": "viewer", "pin": "4444"})
+    assert ok.status_code == 200
+    dup = c.post("/api/auth/register", json={"name": "Dalam2", "email": "dalam@citarasakuliner.com", "role": "viewer", "pin": "4444"})
+    assert dup.status_code == 409
+    assert c.put("/api/settings", headers=H(th), json={"emailDomain": "bukan domain"}).status_code == 400
+    assert c.put("/api/settings", headers=H(th), json={"emailDomain": "@crk.id"}).json()["emailDomain"] == "crk.id"

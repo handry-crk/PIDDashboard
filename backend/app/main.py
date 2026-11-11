@@ -229,7 +229,9 @@ def role_availability():
     for r in D.ROLES:
         h = _role_holder(r)
         out[r] = {"available": not h and (first or r != "pid_head"), "holder": h["name"] if h else None}
-    return {"first": first, "roles": out, "mode": "first" if first else S.get_settings().get("registrationMode", "approval")}
+    st = S.get_settings()
+    return {"first": first, "roles": out, "mode": "first" if first else st.get("registrationMode", "approval"),
+            "emailDomain": st.get("emailDomain", "")}
 
 
 class RegisterIn(BaseModel):
@@ -253,6 +255,12 @@ def register(body: RegisterIn):
         raise HTTPException(400, "Format email tidak valid")
     if db.members.find_one({"name": {"$regex": f"^{re.escape(body.name.strip())}$", "$options": "i"}}):
         raise HTTPException(409, "Nama sudah terdaftar. Pilih nama Anda di halaman login")
+    dom = (S.get_settings().get("emailDomain") or "").strip().lower().lstrip("@")
+    email = body.email.strip().lower()
+    if dom and not email.endswith("@" + dom):
+        raise HTTPException(400, f"Wajib pakai email kantor @{dom}")
+    if email and db.members.find_one({"email": {"$regex": f"^{re.escape(email)}$", "$options": "i"}}):
+        raise HTTPException(409, "Email ini sudah terdaftar. Pilih nama Anda di halaman login")
     first = db.members.count_documents({}) == 0
     mode = S.get_settings().get("registrationMode", "approval")
     if not first and mode == "closed":
@@ -1054,6 +1062,11 @@ def update_settings(body: dict = Body(...), me=Depends(current_member)):
         if url and not url.startswith("https://script.google.com/"):
             raise HTTPException(400, "URL harus URL Web app Apps Script (https://script.google.com/macros/s/.../exec)")
         upd["launchWebhookUrl"] = url
+    if "emailDomain" in body:
+        d = str(body["emailDomain"] or "").strip().lower().lstrip("@")
+        if d and not re.fullmatch(r"[a-z0-9-]+(\.[a-z0-9-]+)+", d):
+            raise HTTPException(400, "Domain email tidak valid, contoh: citarasakuliner.com")
+        upd["emailDomain"] = d
     if "registrationMode" in body:
         if body["registrationMode"] not in ("approval", "closed", "open"):
             raise HTTPException(400, "Mode pendaftaran tidak valid")

@@ -12,19 +12,22 @@ export default function Login({ onLogin }) {
   const [busy, setBusy] = useState(false)
   const [avail, setAvail] = useState(null)
   const [regMode, setRegMode] = useState('approval')
+  const [dom, setDom] = useState('citarasakuliner.com')
   const [sent, setSent] = useState('')
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value })
 
   useEffect(() => {
     api('/api/auth/members').then((m) => { setMembers(m); if (!m.length) setMode('register') }).catch(() => {})
     api('/api/auth/roles').then((r) => {
-      setAvail(r.roles); setRegMode(r.mode || 'approval')
+      setAvail(r.roles); setRegMode(r.mode || 'approval'); setDom(r.emailDomain || '')
       setF((o) => (r.roles[o.role]?.available ? o : { ...o, role: Object.keys(r.roles).find((k) => r.roles[k].available) || 'viewer' }))
     }).catch(() => {})
   }, [])
 
   const submit = async (e) => {
-    e.preventDefault(); setErr(''); setBusy(true)
+    e.preventDefault(); setErr('')
+    if (mode === 'register' && dom && !f.email.trim().toLowerCase().endsWith('@' + dom)) { setErr(`Wajib pakai email kantor @${dom}`); return }
+    setBusy(true)
     try {
       let r
       if (mode === 'login') r = await api('/api/auth/login', { method: 'POST', body: { memberId: f.memberId, pin: f.pin } })
@@ -72,7 +75,7 @@ export default function Login({ onLogin }) {
                 return <option key={k} value={k} disabled={taken}>{v}{taken ? (a.holder ? ` — sudah: ${a.holder}` : ' — ditetapkan Admin') : ''}</option>
               })}</select>
             </Field>
-            <Field label="Email"><input className="inp" type="email" value={f.email} onChange={set('email')} placeholder="nama@crk.co.id" /></Field>
+            <Field label={dom ? `Email kantor (@${dom})` : 'Email'}><input className="inp" type="email" value={f.email} onChange={set('email')} placeholder={`nama@${dom || 'citarasakuliner.com'}`} required={!!dom} /></Field>
             <Field label="WhatsApp"><input className="inp" inputMode="numeric" value={f.phone} onChange={set('phone')} placeholder="08…" /></Field>
           </>
         )}

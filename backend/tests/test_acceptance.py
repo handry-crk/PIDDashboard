@@ -30,7 +30,7 @@ def H(tok):
 
 
 def reg(c, name, role, pin="1111"):
-    r = c.post("/api/auth/register", json={"name": name, "role": role, "email": f"{name.lower()}@crk.id",
+    r = c.post("/api/auth/register", json={"name": name, "role": role, "email": f"{name.lower()}@citarasakuliner.com",
                                            "phone": "081234567890", "pin": pin})
     assert r.status_code == 200, r.text
     return r.json()
@@ -207,7 +207,7 @@ def test_full_flow(c):
 def test_regressions(c):
     th = c.post("/api/auth/admin-login", json={"pin": "1234"}).json()["token"]
     # only the first user may self-register as PID Head
-    r = c.post("/api/auth/register", json={"name": "Orang Luar", "role": "pid_head", "pin": "1111"})
+    r = c.post("/api/auth/register", json={"name": "Orang Luar", "email": "orangluar@citarasakuliner.com", "role": "pid_head", "pin": "1111"})
     assert r.status_code == 409 and "Handry" in r.json()["detail"]
     st = c.get("/api/state", headers=H(th)).json()
     vc = next(p for p in st["projects"] if p["kode"] == "VC-2702-01")

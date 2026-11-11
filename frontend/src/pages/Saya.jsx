@@ -117,7 +117,7 @@ function Admin({ state, reload }) {
         </div>
       </Section>
 
-      <Akses state={state} reload={reload} mode={s.registrationMode || 'approval'} saveSettings={saveSettings} />
+      <Akses state={state} reload={reload} mode={s.registrationMode || 'approval'} domain={s.emailDomain ?? ''} saveSettings={saveSettings} />
 
       <Section fold defaultOpen={false} title="Anggota tim" sub="Role, aktif/nonaktif, reset PIN">
         {state.members.filter((m) => !m.pending).map((m) => (
@@ -244,7 +244,9 @@ const REG_MODES = [
   ['open', 'Terbuka', 'Siapa pun yang tahu link bisa langsung masuk (tidak disarankan)'],
 ]
 
-function Akses({ state, reload, mode, saveSettings }) {
+function Akses({ state, reload, mode, domain, saveSettings }) {
+  const [d, setD] = useState(domain)
+  useEffect(() => setD(domain), [domain])
   const toast = useToast()
   const pending = state.members.filter((m) => m.pending)
   const [f, setF] = useState(null)
@@ -274,6 +276,14 @@ function Akses({ state, reload, mode, saveSettings }) {
             <span><span className="text-sm font-semibold">{l}</span><span className="block text-xs text-char/60">{d}</span></span>
           </label>
         ))}
+      </div>
+      <div className="card mb-3 p-3">
+        <div className="mb-1 text-[13px] font-bold">Domain email wajib</div>
+        <div className="mb-2 text-xs text-char/60">Hanya email dengan domain ini yang bisa daftar. Kosongkan untuk bebas.</div>
+        <div className="grid grid-cols-[1fr_auto] gap-2">
+          <div className="flex items-center rounded-lg border border-line bg-white pl-3 text-sm"><span className="text-char/50">@</span><input className="w-full bg-transparent px-1 py-2 outline-none" value={d} onChange={(e) => setD(e.target.value)} placeholder="citarasakuliner.com" /></div>
+          <button className="btn-p px-4 text-xs" disabled={d === domain} onClick={() => saveSettings({ emailDomain: d })}>Simpan</button>
+        </div>
       </div>
       {f ? (
         <div className="card anim-in p-3">

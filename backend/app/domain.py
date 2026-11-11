@@ -77,6 +77,7 @@ DEFAULT_SETTINGS = {
     "adminEmail": "",
     "stalledDays": 5,
     "registrationMode": "approval",
+    "emailDomain": "citarasakuliner.com",
     "slotStart": {},
     "suppressedSlots": [],
     "lastWeeklyText": "",
