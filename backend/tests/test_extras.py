@@ -343,3 +343,24 @@ def test_forgot_pin(c, monkeypatch):
         c.post("/api/auth/reset", json={"memberId": st["id"], "code": "abc", "pin": "1212"})
     r = c.post("/api/auth/reset", json={"memberId": st["id"], "code": "abc", "pin": "1212"})
     assert r.status_code == 400 and "tidak berlaku" in r.json()["detail"]
+
+
+def test_delete_project_roles(c):
+    from app.auth import hash_pin
+    th = c.post("/api/auth/admin-login", json={"pin": "1234"}).json()["token"]
+    db = dbmod.get_db()
+    sup = db.members.find_one({"role": "pid_supervisor", "active": True})
+    if sup:
+        db.members.update_one({"id": sup["id"]}, {"$set": {"pinHash": hash_pin("6767"), "failedPins": 0, "lockedUntil": None}})
+        sid = sup["id"]
+    else:
+        sid = c.post("/api/members", headers=H(th), json={"name": "Supervisor Hapus", "role": "pid_supervisor", "pin": "6767"}).json()["id"]
+    ts = c.post("/api/auth/login", json={"memberId": sid, "pin": "6767"}).json()["token"]
+    vid = c.post("/api/members", headers=H(th), json={"name": "Penonton", "role": "viewer", "pin": "6666"}).json()["id"]
+    tv = c.post("/api/auth/login", json={"memberId": vid, "pin": "6666"}).json()["token"]
+    if not db.projects.find_one({}):
+        c.post("/api/seed/whiteboard", headers=H(th))
+    pid = db.projects.find_one({})["id"]
+    assert c.delete(f"/api/projects/{pid}", headers=H(tv)).status_code == 403
+    assert c.delete(f"/api/projects/{pid}", headers=H(ts)).status_code == 200
+    assert not db.projects.find_one({"id": pid})

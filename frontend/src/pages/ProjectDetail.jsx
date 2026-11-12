@@ -68,7 +68,7 @@ export default function ProjectDetail({ id, state, reload }) {
   const me = state.me
   const head = me.role === 'pid_head' || me.isAdmin
   const editor = head || me.role === 'pid_supervisor'
-  const canDelete = head
+  const canDelete = head || me.role === 'pid_supervisor'
   const staff = me.role === 'pid_staff'
   const c = state.constants
   const settings = state.settings

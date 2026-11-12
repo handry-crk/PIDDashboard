@@ -746,7 +746,7 @@ def update_handoff(pid: str, body: dict = Body(...), me=Depends(current_member))
 
 @app.delete("/api/projects/{pid}")
 def delete_project(pid: str, me=Depends(current_member)):
-    require(is_head(me), "Hanya PID Head/Admin yang dapat menghapus proyek")
+    require(is_head(me) or me.get("role") == "pid_supervisor", "Hanya PID Head, PID Supervisor, atau Admin yang dapat menghapus proyek")
     db = get_db()
     p = _project(pid)
     if p.get("slotId"):
