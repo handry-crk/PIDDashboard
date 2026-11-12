@@ -2,7 +2,7 @@ import React, { useEffect, useState, createContext, useContext } from 'react'
 
 export const BULAN = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des']
 export const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII']
-export const STAGE_NAMES = ['Pencarian Ide', 'Penyaringan Ide', 'Pembuatan Konsep', 'Pengujian Konsep', 'Pembuatan Prototipe', 'Pengujian Prototipe', 'Komersialisasi']
+export const STAGE_NAMES = ['Pencarian Ide', 'Penyaringan Ide', 'Pembuatan Konsep', 'Pengujian Konsep', 'Pembuatan Prototipe', 'Pengujian Prototipe', 'Prototype Final']
 
 /** Friendly meta per stage: emoji, everyday name, official name, what happens, what to do. */
 export const STAGE = [
@@ -18,7 +18,7 @@ export const STAGE = [
     arti: 'Buat contoh produk asli: resep, porsi, dan hitung modal (HPP).', tugas: 'Isi bahan & takaran, foto contohnya, dan cek food cost.' },
   { emoji: '', santai: 'Tes Rasa', resmi: 'Pengujian Prototipe', bg: '#FFE4E6',
     arti: 'Customer mencicipi dan memberi nilai (mis. 30 orang di Braga).', tugas: 'Buka survey QR, kumpulkan responden, lalu minta keputusan.' },
-  { emoji: '', santai: 'Siap Jual', resmi: 'Komersialisasi', bg: '#FCE7DA',
+  { emoji: '', santai: 'Siap Jual', resmi: 'Prototype Final', bg: '#FCE7DA',
     arti: 'Siapkan launch bersama divisi lain.', tugas: 'Isi harga final & tanggal launch, centang checklist serah terima.' },
 ]
 export const stageLabel = (n) => `${STAGE[n - 1].santai}`

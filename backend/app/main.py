@@ -134,7 +134,7 @@ def _gate(p, n):
         missing = [lab for key, lab in (("launchDate", "launch date"), ("hargaFinal", "harga jual final"), ("hppFinal", "HPP final"))
                    if not d.get(key)]
         if missing:
-            raise HTTPException(400, f"Isi {', '.join(missing)} sebelum menyelesaikan Komersialisasi")
+            raise HTTPException(400, f"Isi {', '.join(missing)} sebelum menyelesaikan Prototype Final")
         open_items = [h["label"] for h in p.get("handoff", []) if not h.get("done") and not h.get("na")]
         if open_items:
             raise HTTPException(400, f"Selesaikan checklist hand-off: {', '.join(open_items)}")
@@ -547,7 +547,7 @@ def move_stage(pid: str, body: dict = Body(...), me=Depends(current_member)):
             p["status"] = "done"
             _save_project(p, {"stages": p["stages"], "status": "done", "launchedAt": (st.get("details") or {}).get("launchDate") or today})
             _promote_kandidat(pid, 8)
-            S.log_activity(pid, me, "launch", frm=cur, to="launch", note=note or "Komersialisasi selesai — produk launch")
+            S.log_activity(pid, me, "launch", frm=cur, to="launch", note=note or "Prototype Final selesai — produk launch")
             LB.sync_async(pid)
             return _project_detail(pid)
         ns = p["stages"][nxt - 1]
@@ -583,7 +583,7 @@ def skip_stage(pid: str, body: dict = Body(...), me=Depends(current_member)):
         raise HTTPException(400, "Tulis alasan skip stage")
     cur = p["currentStage"]
     if cur in (1, 7):
-        raise HTTPException(400, "Stage Pencarian Ide dan Komersialisasi tidak dapat di-skip")
+        raise HTTPException(400, "Stage Pencarian Ide dan Prototype Final tidak dapat di-skip")
     nxt = _next_active(p, cur, 1)
     st = p["stages"][cur - 1]
     st.update({"state": "skipped", "skipReason": reason, "actualStart": None, "actualEnd": None})
@@ -746,7 +746,7 @@ def update_handoff(pid: str, body: dict = Body(...), me=Depends(current_member))
 
 @app.delete("/api/projects/{pid}")
 def delete_project(pid: str, me=Depends(current_member)):
-    require(me.get("isAdmin"), "Hanya Admin yang dapat menghapus proyek")
+    require(is_head(me), "Hanya PID Head/Admin yang dapat menghapus proyek")
     db = get_db()
     p = _project(pid)
     if p.get("slotId"):
@@ -1396,7 +1396,7 @@ def launchboard_sync(pid: str, me=Depends(current_member)):
     require(is_editor(me))
     p = _project(pid)
     if p["currentStage"] < 7 and p["status"] != "done":
-        raise HTTPException(400, "Sinkron ke Launch Board tersedia mulai stage VII Komersialisasi")
+        raise HTTPException(400, "Sinkron ke Launch Board tersedia mulai stage VII Prototype Final")
     st = LB.sync(pid, me)
     if not st["ok"]:
         raise HTTPException(400, f"Sinkron gagal: {st.get('reason')}")

@@ -11,7 +11,7 @@ STAGES = [
     {"n": 4, "roman": "IV", "nama": "Pengujian Konsep", "output": "Hasil uji konsep (Direksi / panel)", "gate": True},
     {"n": 5, "roman": "V", "nama": "Pembuatan Prototipe", "output": "Resep/BOM, porsi, HPP, foto"},
     {"n": 6, "roman": "VI", "nama": "Pengujian Prototipe", "output": "Hasil uji customer (mis. 30 responden)", "gate": True},
-    {"n": 7, "roman": "VII", "nama": "Komersialisasi", "output": "Launch date, harga final, SKU, hand-off", "gate": True},
+    {"n": 7, "roman": "VII", "nama": "Prototype Final", "output": "Launch date, harga final, SKU, hand-off", "gate": True},
 ]
 DECISION_STAGES = {4, 6, 7}
 

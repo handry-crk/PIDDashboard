@@ -46,7 +46,7 @@ def seed_whiteboard(member):
         6: {"plannedStart": "2026-12-02", "plannedEnd": "2026-12-21", "notes": "Uji prototipe di Braga, 30 responden",
             "details": {"lokasi": "Outlet Braga", "respondenTarget": 30, "tanggalMulai": "2026-12-02", "tanggalSelesai": "2026-12-21"}},
         7: {"plannedStart": "2026-12-22", "plannedEnd": "2027-02-01",
-            "notes": "Komersialisasi Feb 2027; siklus berikutnya Jun, Sep, Des 2027"},
+            "notes": "Prototype Final Feb 2027; siklus berikutnya Jun, Sep, Des 2027"},
     }
     vc_cfg = {1: {"state": "done", "plannedStart": "2026-10-26", "plannedEnd": "2026-11-08", "actualStart": "2026-10-26",
                   "actualEnd": "2026-11-08", "notes": "Ide dari Expo"}}
@@ -70,7 +70,7 @@ def seed_whiteboard(member):
         4: {"state": "skipped", "skipReason": "Langsung prototipe berdasarkan data GoFood"},
         5: {"plannedStart": "2026-11-10", "plannedEnd": "2026-11-20"},
         6: {"plannedStart": "2026-11-23", "plannedEnd": "2026-12-01"},
-        7: {"plannedStart": "2026-12-02", "plannedEnd": "2027-01-05", "notes": "Komersialisasi Jan 2027"},
+        7: {"plannedStart": "2026-12-02", "plannedEnd": "2027-01-05", "notes": "Prototype Final Jan 2027"},
     }
     of = _mk_project("OF-2701-01", "Produk Online Jan 2027", "online_food", [], "2027-01-05",
                      "Menu khusus Online Food berbasis data GoFood untuk launch Jan 2027.", 2, "on_track", of_cfg, pic)

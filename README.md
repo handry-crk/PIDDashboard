@@ -1,6 +1,6 @@
 # CRK PID Dashboard
 
-Dashboard pengembangan produk untuk section **Product Innovation Development (PID)**, PT Citarasa Kuliner Indonesia (CRK Group). Mendigitalkan whiteboard SO-PID-010: 7 stage (Pencarian Ide → Komersialisasi), 4 kategori (Varian Cimol, Minuman, Online Food, New Brand), SLA per stage, launch calendar, vendor list, dan reporting read-only untuk Direksi / All Divisi.
+Dashboard pengembangan produk untuk section **Product Innovation Development (PID)**, PT Citarasa Kuliner Indonesia (CRK Group). Mendigitalkan whiteboard SO-PID-010: 7 stage (Pencarian Ide → Prototype Final), 4 kategori (Varian Cimol, Minuman, Online Food, New Brand), SLA per stage, launch calendar, vendor list, dan reporting read-only untuk Direksi / All Divisi.
 
 Stack: FastAPI + MongoDB (backend), React + Vite + Tailwind (frontend, mobile-first), APScheduler (reminder), satu `Dockerfile` untuk Railway.
 

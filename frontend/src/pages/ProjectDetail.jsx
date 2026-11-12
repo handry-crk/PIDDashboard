@@ -68,6 +68,7 @@ export default function ProjectDetail({ id, state, reload }) {
   const me = state.me
   const head = me.role === 'pid_head' || me.isAdmin
   const editor = head || me.role === 'pid_supervisor'
+  const canDelete = head
   const staff = me.role === 'pid_staff'
   const c = state.constants
   const settings = state.settings
@@ -239,14 +240,20 @@ export default function ProjectDetail({ id, state, reload }) {
         <Timeline d={d} id={id} run={run} members={state.members} />
       </Section>
 
+      {canDelete && <button className="btn-o mb-10 mt-2 w-full border-bata text-bata" onClick={() => setDlg('delete')}>Hapus proyek</button>}
+
       {/* dialogs */}
+      <Sheet open={dlg === 'delete'} onClose={() => setDlg(null)} title="Hapus proyek?">
+        <DeleteProject nama={p.nama} onCancel={() => setDlg(null)}
+          onOk={() => api(`/api/projects/${id}`, { method: 'DELETE' }).then(() => { setDlg(null); toast('Proyek dihapus'); reload(); go('#/proyek') }).catch((e) => toast(e.message, 'err'))} />
+      </Sheet>
       <Sheet open={dlg === 'more'} onClose={() => setDlg(null)} title="Pilihan lain">
         <div className="grid gap-2 pb-2">
           {prevN >= 1 && <button className="btn-o justify-start" onClick={() => setDlg('back')}>Mundur ke {STAGE[prevN - 1].santai}</button>}
           {![1, 7].includes(cur) && curSt.state !== 'skipped' && <button className="btn-o justify-start" onClick={() => setDlg('skip')}>Lewati langkah {STAGE[cur - 1].santai}</button>}
           <button className="btn-o justify-start" onClick={() => setDlg('status')}>Ubah status (aman / perlu perhatian / tersendat)</button>
           <button className="btn-o justify-start" onClick={() => setDlg('edit')}>Edit nama, slot, dan tanggal launch</button>
-          {me.isAdmin && <button className="btn-g justify-start text-bata" onClick={async () => { if (confirm('Hapus proyek ini beserta semua isinya?')) { await run(() => api(`/api/projects/${id}`, { method: 'DELETE' }), 'Proyek dihapus'); go('#/proyek') } }}>Hapus proyek</button>}
+          {canDelete && <button className="btn-g justify-start text-bata" onClick={() => setDlg('delete')}>Hapus proyek</button>}
         </div>
       </Sheet>
       <NoteDialog open={dlg === 'back'} title={`Mundur ke ${STAGE[Math.max(prevN, 1) - 1].santai}`} label="Kenapa perlu mundur?" onClose={() => setDlg(null)} onOk={(n) => moveStage(prevN, n)} />
@@ -956,4 +963,20 @@ function EditDialog({ open, p, state, onClose, onOk }) {
     {!f.slotId && <Field label="Target launch"><input type="date" className="inp" value={f.targetLaunch || ''} onChange={(e) => setF({ ...f, targetLaunch: e.target.value })} /></Field>}
     <label className="flex min-h-[44px] items-center gap-2 text-sm"><input type="checkbox" className="h-5 w-5 accent-bata" checked={!!f.resetPlanned} onChange={(e) => setF({ ...f, resetPlanned: e.target.checked })} />Reset semua planned date ke SLA</label>
   </Sheet>
+}
+
+function DeleteProject({ nama, onCancel, onOk }) {
+  const [t, setT] = useState('')
+  const [busy, setBusy] = useState(false)
+  return (
+    <div className="pb-2">
+      <p className="mb-3 text-sm">Proyek <b>{nama}</b> beserta semua ide, resep, survey, dan riwayatnya akan dihapus permanen. Tidak bisa dibatalkan.</p>
+      <p className="mb-1 text-xs text-char/65">Ketik <b>HAPUS</b> untuk konfirmasi</p>
+      <input className="inp mb-3" value={t} onChange={(e) => setT(e.target.value)} autoCapitalize="characters" />
+      <div className="grid grid-cols-2 gap-2">
+        <button className="btn-o" onClick={onCancel}>Batal</button>
+        <button className="btn-p" disabled={t.trim().toUpperCase() !== 'HAPUS' || busy} onClick={async () => { setBusy(true); await onOk(); setBusy(false) }}>Hapus permanen</button>
+      </div>
+    </div>
+  )
 }
