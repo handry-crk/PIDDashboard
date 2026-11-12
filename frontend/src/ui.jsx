@@ -1,4 +1,5 @@
 import React, { useEffect, useState, createContext, useContext } from 'react'
+import { createPortal } from 'react-dom'
 
 export const BULAN = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des']
 export const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII']
@@ -188,8 +189,9 @@ export function Sheet({ open, onClose, title, children, footer, wide }) {
     return () => { document.body.style.overflow = prev }
   }, [open])
   if (!open) return null
-  return (
-    <div className="fade-bg fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center" onClick={onClose}>
+  // Portal ke <body>: kalau tidak, dialog ikut posisi halaman (bisa di luar layar) saat halaman panjang.
+  return createPortal(
+    <div className="fade-bg fixed inset-0 z-[60] flex items-end justify-center bg-black/40 sm:items-center" onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()}
         className={`sheet-up flex max-h-[92vh] w-full flex-col rounded-t-3xl bg-cream sm:rounded-3xl ${wide ? 'sm:max-w-2xl' : 'sm:max-w-lg'}`}>
         <div className="mx-auto mt-2 h-1.5 w-10 rounded-full bg-black/15 sm:hidden" />
@@ -197,10 +199,11 @@ export function Sheet({ open, onClose, title, children, footer, wide }) {
           <div className="text-[17px] font-extrabold text-char">{title}</div>
           <button onClick={onClose} className="-mr-2 flex h-10 w-10 items-center justify-center rounded-full bg-black/5 text-xl" aria-label="Tutup">×</button>
         </div>
-        <div className="flex-1 overflow-y-auto px-5 pb-3">{children}</div>
+        <div className={`flex-1 overflow-y-auto px-5 ${footer ? "pb-3" : "pb-[max(16px,env(safe-area-inset-bottom))]"}`}>{children}</div>
         {footer && <div className="border-t border-line px-5 py-3 pb-[max(12px,env(safe-area-inset-bottom))]">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
@@ -216,7 +219,7 @@ export function ToastProvider({ children }) {
   return (
     <ToastCtx.Provider value={(msg, type = 'ok') => setT({ msg, type })}>
       {children}
-      {t && <div key={t.msg} className="toast-in fixed inset-x-3 bottom-[92px] z-[60] mx-auto max-w-md rounded-2xl px-4 py-3 text-sm font-semibold text-white shadow-xl"
+      {t && <div key={t.msg} className="toast-in fixed inset-x-3 bottom-[92px] z-[70] mx-auto max-w-md rounded-2xl px-4 py-3 text-sm font-semibold text-white shadow-xl"
         style={{ background: t.type === 'err' ? '#B42F27' : '#212121' }}>{t.msg}</div>}
     </ToastCtx.Provider>
   )
