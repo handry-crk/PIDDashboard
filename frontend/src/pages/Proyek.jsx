@@ -101,7 +101,7 @@ export default function Proyek({ state, reload }) {
 
   return (
     <div>
-      <Title sub={`${list.length} proyek`} right={editor && <button className="btn-p hidden sm:inline-flex" onClick={() => { setPresetSlot(null); setOpenNew(true) }}>+ Proyek</button>}>Semua Proyek</Title>
+      <Title sub={`${list.length} proyek`} right={editor && <button className="btn-p min-h-[40px] px-4 text-sm" onClick={() => { setPresetSlot(null); setOpenNew(true) }}>+ Proyek</button>}>Semua Proyek</Title>
       <input className="inp mb-2" placeholder="Cari nama menu, kode, atau ide…" value={q} onChange={(e) => setQ(e.target.value)} />
       <div className="no-scrollbar -mx-4 mb-2 flex gap-2 overflow-x-auto px-4">
         {FILTERS.map(([k, l]) => <button key={k} onClick={() => setFilter(k)} className={`min-h-[36px] shrink-0 rounded-full border px-3 text-xs font-semibold ${filter === k ? 'border-bata bg-bata text-cream' : 'border-bata text-bata'}`}>{l}</button>)}
@@ -118,7 +118,6 @@ export default function Proyek({ state, reload }) {
       {stage > 0 && <div className="-mt-2 mb-3 text-xs text-char/65">{STAGE[stage - 1].arti}</div>}
       {list.length ? <div className="grid gap-2.5 md:grid-cols-2">{list.map((p) => <ProjectCard key={p.id} p={p} stages={c.stages} categories={c.categories} onClick={() => go(`#/proyek/${p.id}`)} />)}</div>
         : <Empty>Tidak ada proyek untuk pilihan ini.</Empty>}
-      {editor && <button onClick={() => { setPresetSlot(null); setOpenNew(true) }} className="fixed bottom-[80px] right-4 z-30 flex h-14 items-center gap-1 rounded-full bg-bata px-5 text-sm font-bold text-cream shadow-lg sm:hidden">+ Proyek</button>}
       <NewProjectSheet open={openNew} onClose={() => setOpenNew(false)} state={state} presetSlot={presetSlot} reload={reload} />
     </div>
   )

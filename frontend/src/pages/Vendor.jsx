@@ -90,8 +90,8 @@ export default function Vendor({ state }) {
   return (
     <div>
       <Title sub="Pemasok bahan baku, terutama untuk menu Online Food" right={<div className="flex gap-2">
-        {head && <button className="btn-g border border-line px-3 text-xs" onClick={() => download('/api/export/vendors.csv', 'pid-vendors.csv')}>Export CSV</button>}
-        {editor && <button className="btn-p hidden px-3 sm:inline-flex" onClick={() => setEdit({ ...BLANK })}>+ Vendor</button>}</div>}>Vendor</Title>
+        {head && <button className="btn-g whitespace-nowrap border border-line px-3 text-xs" onClick={() => download('/api/export/vendors.csv', 'pid-vendors.csv')}>Export</button>}
+        {editor && <button className="btn-p min-h-[40px] whitespace-nowrap px-4 text-sm" onClick={() => setEdit({ ...BLANK })}>+ Vendor</button>}</div>}>Vendor</Title>
       <input className="inp mb-2" placeholder="Cari vendor, kota, atau bahan…" value={q} onChange={(e) => setQ(e.target.value)} />
       <div className="mb-4 grid grid-cols-2 gap-2">
         <select className="inp" value={kat} onChange={(e) => setKat(e.target.value)}><option value="">Semua kategori bahan</option>{c.kategoriBahan.map((k) => <option key={k}>{k}</option>)}</select>
@@ -118,7 +118,6 @@ export default function Vendor({ state }) {
           ))}
         </div>
       ) : <Empty>{list.length ? 'Tidak ada vendor untuk filter ini.' : 'Belum ada vendor. Tambahkan vendor bahan baku untuk dipakai di BOM prototipe.'}</Empty>}
-      {editor && <button onClick={() => setEdit({ ...BLANK })} className="fixed bottom-[80px] right-4 z-30 h-14 rounded-full bg-bata px-5 text-sm font-bold text-cream shadow-lg sm:hidden">+ Vendor</button>}
 
       <Sheet open={!!view} onClose={() => setView(null)} title={view?.nama} footer={editor && <div className="flex gap-2">
         {head && <button className="btn-g text-bata" onClick={async () => { try { await api(`/api/vendors/${view.id}`, { method: 'DELETE' }); setView(null); load(); toast('Vendor dihapus') } catch (e) { toast(e.message, 'err') } }}>Delete</button>}
