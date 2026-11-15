@@ -15,7 +15,7 @@ export const parseNum = (t) => {
   if (t === null || t === undefined || String(t).trim() === '') return null
   let x = String(t).replace(/Rp|\s/g, '')
   if (x.includes(',')) x = x.replace(/\./g, '').replace(',', '.')
-  else if (/\.\d{3}$/.test(x)) x = x.replace(/\./g, '')
+  else if (/^-?[1-9]\d{0,2}(\.\d{3})+$/.test(x)) x = x.replace(/\./g, '')
   const n = Number(x)
   return isNaN(n) ? NaN : n
 }
@@ -148,7 +148,7 @@ export default function ProjectDetail({ id, state, reload }) {
 
       {closed && (
         <div className={`mb-4 flex items-center justify-between rounded-2xl p-4 ${p.status === 'done' ? 'bg-[#DCEFE3]' : 'bg-black/5'}`}>
-          <span className="text-[15px] font-bold">{p.status === 'done' ? `Sudah launch ${fmtTgl(p.launchedAt)}` : 'Proyek dihentikan'}</span>
+          <span className="text-[15px] font-bold">{p.status === 'done' ? `${(p.launchedAt || '').slice(0, 10) > state.serverToday ? 'Siap launch, rilis' : 'Sudah launch'} ${fmtTgl(p.launchedAt)}` : 'Proyek dihentikan'}</span>
           {p.status === 'dropped' && head && <button className="btn-o min-h-[38px] px-3 text-xs" onClick={() => run(() => api(`/api/projects/${id}/reopen`, { method: 'POST', body: {} }), 'Proyek dibuka kembali')}>Buka lagi</button>}
         </div>
       )}

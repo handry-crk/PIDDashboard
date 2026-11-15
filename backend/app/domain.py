@@ -117,7 +117,7 @@ def num(v, default=None):
     t = str(v).strip().replace("Rp", "").replace(" ", "")
     if "," in t:
         t = t.replace(".", "").replace(",", ".")
-    elif t.count(".") >= 1 and len(t.split(".")[-1]) == 3:
+    elif __import__("re").fullmatch(r"-?[1-9]\d{0,2}(\.\d{3})+", t):
         t = t.replace(".", "")
     try:
         f = float(t)
@@ -247,8 +247,9 @@ def compute_project_flags(p, settings, last_activity_at=None, t=None):
     st = p["stages"][cur - 1]
     out = {"daysInStage": None, "sla": sla[cur - 1], "slaSisa": None, "lewatSla": False, "stalled": False,
            "risikoLaunch": False, "daysToLaunch": None, "progress": 0, "remainingSlaDays": None}
-    done_count = sum(1 for s in p["stages"] if s["state"] in ("done", "skipped"))
-    out["progress"] = round(done_count / 7 * 100)
+    done_count = sum(1 for s in p["stages"] if s["state"] == "done")
+    todo_count = sum(1 for s in p["stages"] if s["state"] != "skipped") or 1
+    out["progress"] = round(done_count / todo_count * 100)
     if p.get("status") in ("done", "dropped"):
         out["effectiveStatus"] = p["status"]
         if p.get("status") == "done":

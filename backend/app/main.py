@@ -552,7 +552,8 @@ def move_stage(pid: str, body: dict = Body(...), me=Depends(current_member)):
             return _project_detail(pid)
         ns = p["stages"][nxt - 1]
         ns["state"], ns["actualStart"], ns["actualEnd"] = "in_progress", today, None
-        ns["decision"] = None if nxt in D.DECISION_STAGES and ns.get("decision") != "go" else ns.get("decision")
+        if nxt in D.DECISION_STAGES:
+            ns["decision"], ns["decisionRequested"] = None, False
         _save_project(p, {"stages": p["stages"], "currentStage": nxt,
                           "status": p["status"] if p["status"] in ("blocked",) else "on_track"})
         _promote_kandidat(pid, nxt)
@@ -564,6 +565,8 @@ def move_stage(pid: str, body: dict = Body(...), me=Depends(current_member)):
         if not note:
             raise HTTPException(400, "Tulis alasan sebelum kembali ke stage sebelumnya")
         st["state"], st["actualStart"] = "not_started", None
+        if cur in D.DECISION_STAGES:
+            st["decision"], st["decisionRequested"] = None, False
         ps = p["stages"][prv - 1]
         ps["state"], ps["actualEnd"] = "in_progress", None
         if prv in D.DECISION_STAGES:
@@ -724,6 +727,9 @@ def update_stage(pid: str, n: int, body: dict = Body(...), me=Depends(current_me
                 hf, hp = D.num(det.get("hargaFinal")), D.num(det.get("hppFinal"))
             except ValueError as e:
                 raise HTTPException(400, str(e))
+            for key, val in (("hargaFinal", hf), ("hppFinal", hp)):
+                if det.get(key) not in (None, ""):
+                    det[key] = val
             det["foodCostPct"] = round(hp / hf * 100, 1) if hf and hp else None
         st["details"] = det
     _save_project(p, {"stages": p["stages"]})
@@ -756,6 +762,14 @@ def delete_project(pid: str, me=Depends(current_member)):
     db.kandidat.delete_many({"projectId": pid})
     db.surveys.delete_many({"projectId": pid})
     db.responses.delete_many({"projectId": pid})
+    for f in list(db.files.find({"projectId": pid})):
+        try:
+            ST.delete(f)
+        except Exception:
+            pass
+    db.files.delete_many({"projectId": pid})
+    db.activity.delete_many({"projectId": pid})
+    db.comments.delete_many({"projectId": pid})
     db.projects.delete_one({"id": pid})
     return {"ok": True}
 

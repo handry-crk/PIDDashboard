@@ -130,7 +130,8 @@ def summary(projects, slots, settings):
     upcoming = sorted([p for p in active if p.get("targetLaunch") and D.pdate(p["targetLaunch"]) >= t],
                       key=lambda p: p["targetLaunch"])
     nxt = upcoming[0] if upcoming else None
-    launched_ytd = [p for p in projects if p.get("status") == "done" and (p.get("launchedAt") or "")[:4] == str(t.year)]
+    launched_ytd = [p for p in projects if p.get("status") == "done" and (p.get("launchedAt") or "")[:4] == str(t.year)
+                    and (p.get("launchedAt") or "")[:10] <= D.fdate(t)]
     target_ytd = sum(settings["launchTargetPerYear"].values())
     empty3 = [s for s in slots if s["flags"]["slotKosong"] and _months_ahead(s["period"], t) < 3]
     return {
@@ -173,7 +174,7 @@ def takeaway(active, over, blocked, waiting, nxt, empty3, t):
     if issues:
         s += " Perlu dicek: " + "; ".join(issues) + "."
     else:
-        s += " Semua berjalan sesuai jadwal 👍"
+        s += " Semua berjalan sesuai jadwal."
     return s
 
 

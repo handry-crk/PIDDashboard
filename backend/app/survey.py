@@ -114,6 +114,12 @@ def recompute(pid):
         tr = dict(k.get("testResult") or {})
         tr["prototipe"] = {**(tr.get("prototipe") or {}), **agg}
         db.kandidat.update_one({"id": kid}, {"$set": {"testResult": tr}})
+    for k in clean_all(db.kandidat.find({"projectId": pid})):
+        pr = (k.get("testResult") or {}).get("prototipe") or {}
+        if k["id"] not in per and pr.get("source") == "survey":
+            tr = dict(k.get("testResult") or {})
+            tr.pop("prototipe", None)
+            db.kandidat.update_one({"id": k["id"]}, {"$set": {"testResult": tr}})
     p = _project(pid)
     p["stages"][5]["details"] = {**(p["stages"][5].get("details") or {}), "respondenActual": len(rows), "respondenSource": "survey"}
     db.projects.update_one({"id": pid}, {"$set": {"stages": p["stages"]}})

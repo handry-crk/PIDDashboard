@@ -35,7 +35,7 @@ export function Attachments({ files, params, can, onChange, label = 'Upload file
           {imgs.map((f) => (
             <div key={f.id} className="relative">
               <a href={f.url} target="_blank" rel="noreferrer"><img src={f.url} alt={f.name} className="h-20 w-20 rounded-lg border border-line object-cover" /></a>
-              {can && <button onClick={() => del(f)} className="absolute -right-1.5 -top-1.5 h-6 w-6 rounded-full bg-char text-xs font-bold text-white" aria-label="Delete">×</button>}
+              {can && <button onClick={() => del(f)} className="absolute -right-2 -top-2 h-7 w-7 rounded-full bg-bata text-xs font-bold text-white" aria-label="Delete">×</button>}
             </div>
           ))}
           {can && imagesOnly && (

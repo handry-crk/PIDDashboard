@@ -364,3 +364,37 @@ def test_delete_project_roles(c):
     assert c.delete(f"/api/projects/{pid}", headers=H(tv)).status_code == 403
     assert c.delete(f"/api/projects/{pid}", headers=H(ts)).status_code == 200
     assert not db.projects.find_one({"id": pid})
+
+
+def test_audit_fixes(c):
+    # number parsing: thousands vs decimals
+    for raw, want in [("0.125", 0.125), ("1.250", 1250), ("12.500", 12500), ("1.234.567", 1234567), ("4,5", 4.5),
+                      ("1.250,75", 1250.75), ("0.5", 0.5), ("Rp 15.000", 15000), ("12.50", 12.5)]:
+        assert D.num(raw) == want, raw
+    # progress ignores skipped steps
+    st = D.empty_stages()
+    st[0]["state"] = "done"; st[1]["state"] = "in_progress"; st[1]["actualStart"] = "2026-11-10"
+    st[2]["state"] = st[3]["state"] = "skipped"
+    p = {"category": "online_food", "currentStage": 2, "stages": st, "status": "on_track", "targetLaunch": "2027-01-05"}
+    assert D.compute_project_flags(p, D.DEFAULT_SETTINGS, t=date(2026, 11, 10))["progress"] == 20
+    # a decision must be given again after stepping back
+    th = c.post("/api/auth/admin-login", json={"pin": "1234"}).json()["token"]
+    pid = c.post("/api/projects", headers=H(th), json={"nama": "Audit Mundur", "category": "minuman", "targetLaunch": "2027-09-01"}).json()["project"]["id"]
+    kid = c.post("/api/kandidat", headers=H(th), json={"projectId": pid, "nama": "Es Audit"}).json()["id"]
+    c.post(f"/api/projects/{pid}/stage", headers=H(th), json={"to": 1})
+    c.post(f"/api/projects/{pid}/stage", headers=H(th), json={"to": 2})
+    c.put(f"/api/kandidat/{kid}/scores", headers=H(th), json={"scores": {"market": 5, "harga": 4, "ops": 4, "bahan": 3, "diferensiasi": 4}})
+    c.put(f"/api/kandidat/{kid}", headers=H(th), json={"status": "lolos_screening"})
+    for to in (3, 4):
+        assert c.post(f"/api/projects/{pid}/stage", headers=H(th), json={"to": to}).status_code == 200
+    c.post(f"/api/projects/{pid}/request-decision", headers=H(th), json={})
+    c.post(f"/api/projects/{pid}/decision", headers=H(th), json={"decision": "go"})
+    assert c.post(f"/api/projects/{pid}/stage", headers=H(th), json={"to": 3, "note": "ulang konsep"}).status_code == 200
+    assert c.post(f"/api/projects/{pid}/stage", headers=H(th), json={"to": 4}).status_code == 200
+    r = c.post(f"/api/projects/{pid}/stage", headers=H(th), json={"to": 5})
+    assert r.status_code == 400 and "keputusan" in r.json()["detail"]
+    # deleting a project leaves no orphans
+    db = dbmod.get_db()
+    assert db.activity.count_documents({"projectId": pid}) > 0
+    assert c.delete(f"/api/projects/{pid}", headers=H(th)).status_code == 200
+    assert db.activity.count_documents({"projectId": pid}) == 0 and db.kandidat.count_documents({"projectId": pid}) == 0

@@ -25,7 +25,7 @@ export function NewProjectSheet({ open, onClose, state, presetSlot, reload }) {
     try {
       const r = await api('/api/projects', { method: 'POST', body: { ...f, slotId: f.slotId || null, targetLaunch: f.slotId ? null : (f.targetLaunch || null) } })
       if (r.queued) { toast('Offline: proyek akan dibuat otomatis saat online'); onClose(); return }
-      toast(`Proyek ${r.project.kode} dibuat. Cek jadwal stage hasil back-schedule.`)
+      toast(`Proyek ${r.project.kode} dibuat`)
       onClose(); await reload(); go(`#/proyek/${r.project.id}`)
     } catch (e) { toast(e.message, 'err') } finally { setBusy(false) }
   }

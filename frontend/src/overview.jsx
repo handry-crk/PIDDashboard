@@ -124,7 +124,7 @@ export function ProjectCard({ p, stages, categories, onClick }) {
           <div className="min-w-0 text-[13px]">
             {done ? <span className="font-semibold">Sudah launch</span> : <>
               <span className="text-char/55">Sekarang: </span><span className="font-bold">{st.santai}</span>
-              {p.waitingDecision && <span className="ml-1 rounded-full bg-[#FBEBD2] px-2 py-0.5 text-[11px] font-bold text-amber">tunggu keputusan</span>}
+              {p.waitingDecision && <span className="ml-1 whitespace-nowrap rounded-full bg-[#FBEBD2] px-2 py-0.5 text-[11px] font-bold text-amber">tunggu keputusan</span>}
             </>}
           </div>
           {sla && !done && <span className={`shrink-0 text-[12px] font-bold ${f.lewatSla ? 'text-bata' : 'text-char/70'}`}>{sla}</span>}

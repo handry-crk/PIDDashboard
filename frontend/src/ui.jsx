@@ -136,7 +136,7 @@ export function Stepper({ stages, current, flags, status, size = 'sm', onTap, ac
       {labels && (
         <div className="mt-2 flex justify-between">
           {stages.map((s, i) => (
-            <div key={i} className={`w-11 text-center text-[10px] leading-tight transition-colors ${i + 1 === current ? 'font-bold text-bata' : 'text-char/45'}`}>{STAGE[i].santai}</div>
+            <div key={i} className={`min-w-0 flex-1 px-0.5 text-center text-[9.5px] leading-tight transition-colors ${i + 1 === current ? 'font-bold text-bata' : 'text-char/45'}`}>{STAGE[i].santai}</div>
           ))}
         </div>
       )}
