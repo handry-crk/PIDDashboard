@@ -108,12 +108,12 @@ export default function Proyek({ state, reload }) {
       </div>
       <div className="no-scrollbar -mx-4 mb-4 flex gap-2 overflow-x-auto px-4">
         {[['', 'Semua kategori'], ...c.categoryOrder.map((k) => [k, `${c.categories[k].label}`])].map(([k, l]) =>
-          <button key={k} onClick={() => setCat(k)} className={`min-h-[34px] shrink-0 rounded-full px-3 text-xs font-semibold ${cat === k ? 'bg-char text-cream' : 'bg-tint2 text-char/80'}`}>{l}</button>)}
+          <button key={k} onClick={() => setCat(k)} className={`min-h-[34px] shrink-0 rounded-full px-3 text-xs font-semibold ${cat === k ? 'bg-bata text-cream' : 'bg-tint2 text-char/80'}`}>{l}</button>)}
       </div>
       <div className="no-scrollbar -mx-4 mb-4 flex gap-1.5 overflow-x-auto px-4">
-        <button onClick={() => setStage(0)} className={`min-h-[34px] shrink-0 rounded-full px-3 text-xs font-semibold ${!stage ? 'bg-char text-white' : 'bg-black/5 text-char/70'}`}>Semua langkah</button>
+        <button onClick={() => setStage(0)} className={`min-h-[34px] shrink-0 rounded-full px-3 text-xs font-semibold ${!stage ? 'bg-bata text-cream' : 'bg-black/5 text-char/70'}`}>Semua langkah</button>
         {c.stages.map((s) => <button key={s.n} onClick={() => setStage(s.n)} title={s.nama}
-          className={`min-h-[34px] shrink-0 rounded-full px-3 text-xs font-bold ${stage === s.n ? 'bg-char text-white' : 'bg-black/5 text-char/70'}`}>{STAGE[s.n - 1].santai}</button>)}
+          className={`min-h-[34px] shrink-0 rounded-full px-3 text-xs font-bold ${stage === s.n ? 'bg-bata text-cream' : 'bg-black/5 text-char/70'}`}>{STAGE[s.n - 1].santai}</button>)}
       </div>
       {stage > 0 && <div className="-mt-2 mb-3 text-xs text-char/65">{STAGE[stage - 1].arti}</div>}
       {list.length ? <div className="grid gap-2.5 md:grid-cols-2">{list.map((p) => <ProjectCard key={p.id} p={p} stages={c.stages} categories={c.categories} onClick={() => go(`#/proyek/${p.id}`)} />)}</div>

@@ -84,10 +84,10 @@ export default function Beranda({ state, reload }) {
 
       <Tiles s={state.summary} onTile={onTile} />
 
-      <button onClick={() => go('#/timeline')} className="anim-in group mb-7 flex w-full items-center gap-3 rounded-2xl bg-char p-4 text-left text-white transition hover:-translate-y-0.5 active:scale-[.99]">
+      <button onClick={() => go('#/timeline')} className="anim-in group mb-7 flex w-full items-center gap-3 rounded-2xl bg-bata p-4 text-left text-cream shadow-sm transition hover:-translate-y-0.5 active:scale-[.99]">
         <div className="min-w-0 flex-1">
           <div className="text-[16px] font-extrabold">Lihat jadwal bulan ini</div>
-          <div className="text-[12px] text-white/70">{monthSummary(state.projects, monthOf(state.serverToday), state.serverToday)}</div>
+          <div className="text-[12px] text-cream/85">{monthSummary(state.projects, monthOf(state.serverToday), state.serverToday)}</div>
         </div>
         <span className="text-xl transition-transform group-hover:translate-x-1">→</span>
       </button>
